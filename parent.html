@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#1c2836" />
+<title>Parent overview — Attenova</title>
+<meta name="description" content="See your child's attendance and get alerts when a check-in succeeds or fails." />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap" />
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body data-page="parent">
+<header class="app">
+  <div class="bar">
+    <a class="logo" href="parent.html">
+      <span class="mark">A</span>
+      <div><div class="name">Attenova</div><div class="tag">face + location verified</div></div>
+    </a>
+    <nav id="app-nav">
+      <a href="parent.html" aria-current="page">Parent</a>
+      <button class="btn-header install-btn" id="pwa-install-btn" type="button" hidden>Install App</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="row between">
+    <div>
+      <h1 id="parent-heading">Aarav's attendance</h1>
+      <p class="muted small" id="parent-subheading">Computer Science, Semester 5 · roll no CS21-014</p>
+    </div>
+    <a class="btn secondary" href="preferences.html">Alert settings</a>
+  </div>
+
+  <div class="grid grid-3 mt">
+    <div class="panel"><div class="stat" id="parent-stat-pct">92%</div><div class="muted small">this month</div></div>
+    <div class="panel"><div class="stat" id="parent-stat-ratio">22 / 24</div><div class="muted small">classes attended</div></div>
+    <div class="panel"><div class="stat"><span id="unread-count">3</span></div><div class="muted small">new alerts</div></div>
+  </div>
+
+  <div class="panel mt">
+    <div class="row between mb">
+      <h3>Alerts</h3>
+      <button class="btn ghost" id="mark-read" type="button">Mark all read</button>
+    </div>
+    <div class="grid" style="gap:10px" id="parent-alerts-list"></div>
+  </div>
+
+  <div class="panel mt">
+    <h3>Attendance history</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Date</th><th>Class</th><th>GPS Location &amp; Coordinates</th><th>Status</th><th>Time</th><th>GPS Photo</th></tr></thead>
+        <tbody id="parent-history-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<footer class="app">Attenova · parent view</footer>
+<script src="js/app.js"></script>
+</body>
+</html>

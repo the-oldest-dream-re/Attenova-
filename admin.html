@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#1c2836" />
+<title>Institution Admin — Attenova</title>
+<meta name="description" content="Manage institutional users, students, teachers, parents, classes, and attendance records." />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap" />
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body data-page="admin">
+<header class="app">
+  <div class="bar">
+    <a class="logo" href="admin.html">
+      <span class="mark">A</span>
+      <div><div class="name">Attenova</div><div class="tag">institution admin</div></div>
+    </a>
+    <nav id="app-nav">
+      <a href="admin.html" aria-current="page">Admin</a>
+      <a href="faculty.html">Faculty</a>
+      <a href="student.html">Student</a>
+      <a href="parent.html">Parent</a>
+      <button class="btn-header install-btn" id="pwa-install-btn" type="button" hidden>Install App</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap" data-tabs>
+  <div class="row between">
+    <div>
+      <h1>Institution Admin Portal</h1>
+      <p class="muted small" id="admin-meta">Manage students, faculty, parents, classes, and attendance records</p>
+    </div>
+    <span class="badge info">Full Institutional Access</span>
+  </div>
+
+  <div class="grid grid-4 mt">
+    <div class="panel"><div class="stat" id="admin-count-users">0</div><div class="muted small">registered accounts</div></div>
+    <div class="panel"><div class="stat" id="admin-count-students">0</div><div class="muted small">enrolled students</div></div>
+    <div class="panel"><div class="stat" id="admin-count-classes">0</div><div class="muted small">active classes</div></div>
+    <div class="panel"><div class="stat" id="admin-count-logs">0</div><div class="muted small">attendance logs</div></div>
+  </div>
+
+  <div class="tabs mt">
+    <button class="active" data-target="users" type="button">Users &amp; Accounts</button>
+    <button data-target="classes" type="button">Classes &amp; Geofences</button>
+    <button data-target="logs" type="button">Attendance Logs</button>
+    <button data-target="oauth" type="button">Google OAuth Setup</button>
+  </div>
+
+  <!-- TAB 1: Users & Accounts -->
+  <section class="tabpanel" data-tab="users">
+    <div class="panel mb">
+      <h3>Add institutional user (Student / Faculty / Parent / Admin)</h3>
+      <p class="muted small">Passwords are encrypted with bcrypt before saving to the server database.</p>
+      <form id="admin-add-user-form" class="mt">
+        <div class="grid grid-3">
+          <div class="field">
+            <label for="u-name">Full name</label>
+            <input id="u-name" placeholder="Rohan Kulkarni" required />
+          </div>
+          <div class="field">
+            <label for="u-email">Institutional email</label>
+            <input id="u-email" type="email" placeholder="rohan@college.edu" required />
+          </div>
+          <div class="field">
+            <label for="u-pass">Password</label>
+            <input id="u-pass" type="password" placeholder="password123" value="password123" required />
+          </div>
+        </div>
+        <div class="grid grid-3">
+          <div class="field">
+            <label for="u-role">Role</label>
+            <select id="u-role">
+              <option value="student">Student</option>
+              <option value="faculty">Teacher / Faculty</option>
+              <option value="parent">Parent</option>
+              <option value="admin">Institution Admin</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="u-dept">Department / Branch</label>
+            <input id="u-dept" placeholder="Computer Science" value="Computer Science" />
+          </div>
+          <div class="field">
+            <label for="u-roll">Roll No (Student or Child's Roll No)</label>
+            <input id="u-roll" placeholder="CS21-018" />
+          </div>
+        </div>
+        <div class="row">
+          <button class="btn" type="submit">Add user to database</button>
+          <span class="small muted" id="admin-user-status"></span>
+        </div>
+      </form>
+    </div>
+
+    <div class="panel">
+      <h3>Registered institutional users</h3>
+      <div class="table-wrap mt">
+        <table>
+          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Department / Details</th><th>Action</th></tr></thead>
+          <tbody id="admin-users-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB 2: Classes -->
+  <section class="tabpanel" data-tab="classes" hidden>
+    <div class="panel mb">
+      <h3>Add a classroom</h3>
+      <form id="admin-add-class-form" class="mt">
+        <div class="grid grid-3">
+          <div class="field"><label for="ac-name">Class name</label><input id="ac-name" placeholder="Artificial Intelligence" required /></div>
+          <div class="field"><label for="ac-room">Room</label><input id="ac-room" placeholder="Room D-105" value="Room D-105" required /></div>
+          <div class="field"><label for="ac-sched">Schedule</label><input id="ac-sched" placeholder="15:00 – 16:00" value="15:00 – 16:00" /></div>
+        </div>
+        <div class="grid grid-3">
+          <div class="field"><label for="ac-lat">Latitude</label><input id="ac-lat" value="19.0176" required /></div>
+          <div class="field"><label for="ac-lng">Longitude</label><input id="ac-lng" value="73.0860" required /></div>
+          <div class="field"><label for="ac-rad">Radius (m)</label><input id="ac-rad" type="number" value="60" required /></div>
+        </div>
+        <button class="btn" type="submit">Save classroom</button>
+      </form>
+    </div>
+
+    <div class="panel">
+      <h3>All institutional classes</h3>
+      <div class="table-wrap mt">
+        <table>
+          <thead><tr><th>Class</th><th>Room &amp; Schedule</th><th>Coordinates</th><th>Radius</th><th>Session</th><th>Action</th></tr></thead>
+          <tbody id="admin-classes-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB 3: Attendance Logs -->
+  <section class="tabpanel" data-tab="logs" hidden>
+    <div class="panel">
+      <h3>All institutional attendance logs</h3>
+      <div class="table-wrap mt">
+        <table>
+          <thead><tr><th>Date</th><th>Time</th><th>Roll no</th><th>Student</th><th>Class</th><th>GPS Location &amp; Coordinates</th><th>Status</th><th>Distance</th><th>GPS Photo</th></tr></thead>
+          <tbody id="admin-logs-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB 4: Google OAuth Settings -->
+  <section class="tabpanel" data-tab="oauth" hidden>
+    <div class="panel">
+      <h3>Real Google Sign-In Configuration</h3>
+      <p class="muted small">Attenova uses Google Identity Services (<code>https://accounts.google.com/gsi/client</code>) and verifies ID tokens on the server with <code>google-auth-library</code>. Set your Google OAuth 2.0 Web Client ID below or via the <code>GOOGLE_CLIENT_ID</code> environment variable on Render.com.</p>
+      <div class="field mt">
+        <label for="admin-google-client-id">Google OAuth 2.0 Client ID</label>
+        <input id="admin-google-client-id" placeholder="1234567890-abcdefg.apps.googleusercontent.com" />
+      </div>
+      <div class="row">
+        <button class="btn" id="admin-save-google-btn" type="button">Save Client ID</button>
+        <span class="small muted" id="admin-google-status"></span>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="app">Attenova · institution administration</footer>
+<script src="js/app.js"></script>
+</body>
+</html>

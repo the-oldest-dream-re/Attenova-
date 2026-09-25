@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#1c2836" />
+<title>Alert settings — Attenova</title>
+<meta name="description" content="Choose which attendance alerts you want to receive about your child." />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap" />
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body data-page="preferences">
+<header class="app">
+  <div class="bar">
+    <a class="logo" href="parent.html">
+      <span class="mark">A</span>
+      <div><div class="name">Attenova</div><div class="tag">face + location verified</div></div>
+    </a>
+    <nav id="app-nav">
+      <a href="parent.html">Parent</a>
+      <button class="btn-header install-btn" id="pwa-install-btn" type="button" hidden>Install App</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <h1>Alert settings</h1>
+  <p class="muted small">Pick the moments you want to hear about. Changes are saved to your account and apply to future check-ins.</p>
+
+  <form class="panel mt" id="pref-form">
+    <div class="switch-row">
+      <div><strong>Successful check-in</strong><div class="muted small">Face and location both verified.</div></div>
+      <label class="switch"><input id="pref-ok" type="checkbox" checked /><span></span></label>
+    </div>
+    <div class="switch-row">
+      <div><strong>Late check-in</strong><div class="muted small">Marked present after the class started.</div></div>
+      <label class="switch"><input id="pref-late" type="checkbox" checked /><span></span></label>
+    </div>
+    <div class="switch-row">
+      <div><strong>Wrong location</strong><div class="muted small">Check-in tried from outside the classroom area.</div></div>
+      <label class="switch"><input id="pref-outside" type="checkbox" checked /><span></span></label>
+    </div>
+    <div class="switch-row">
+      <div><strong>Face not matched</strong><div class="muted small">The face scan did not match the enrolled student.</div></div>
+      <label class="switch"><input id="pref-face" type="checkbox" /><span></span></label>
+    </div>
+    <div class="row mt">
+      <button class="btn" type="submit">Save settings</button>
+      <a class="btn ghost" href="parent.html">Back to overview</a>
+      <span class="small muted" id="pref-status"></span>
+    </div>
+  </form>
+</main>
+
+<footer class="app">Attenova · parent settings</footer>
+<script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#1c2836" />
+<title>Attenova — Face &amp; Location Verified Attendance</title>
+<meta name="description" content="Attendance verified by face match and classroom location, with separate sign-ins for faculty, students, parents, and institutional admins." />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap" />
+<link rel="stylesheet" href="css/styles.css" />
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body data-page="login">
+<header class="app">
+  <div class="bar">
+    <a class="logo" href="index.html">
+      <span class="mark">A</span>
+      <div>
+        <div class="name">Attenova</div>
+        <div class="tag">face + location verified</div>
+      </div>
+    </a>
+    <nav id="app-nav">
+      <a href="index.html" aria-current="page">Sign in</a>
+      <button class="btn-header install-btn" id="pwa-install-btn" type="button" hidden>Install App</button>
+    </nav>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap">
+    <div>
+      <span class="pill">Smart Institutional Attendance</span>
+      <h1>Attendance that proves who was there, and where.</h1>
+      <p class="lead">Students check in with a quick face scan inside the classroom. If the face or the location doesn't match, the check-in is rejected and parents are told right away.</p>
+      <div class="row mt">
+        <span class="badge info">Bcrypt + JWT Secured</span>
+        <span class="badge info">Google Identity Services</span>
+        <span class="badge info">Installable PWA</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Sign in to Attenova</h2>
+      <p class="muted small">Sign in with your institutional email or Google account. Admin emails route automatically to the Admin Portal.</p>
+
+      <div id="login-alert" class="auth-msg error" hidden></div>
+
+      <form id="login-form">
+        <div class="field">
+          <label>I am signing in as</label>
+          <div class="role-pills">
+            <input type="radio" id="role-student" name="role" value="student" checked />
+            <label for="role-student">Student</label>
+            <input type="radio" id="role-faculty" name="role" value="faculty" />
+            <label for="role-faculty">Teacher / Faculty</label>
+            <input type="radio" id="role-parent" name="role" value="parent" />
+            <label for="role-parent">Parent</label>
+          </div>
+        </div>
+
+        <!-- Real Google Sign-In Button Container (Google Identity Services) -->
+        <div class="google-auth-box">
+          <div id="google-signin-button"></div>
+          <div id="google-setup-bar" class="google-fallback-bar" hidden>
+            <span>Google Sign-In ready — add your Google OAuth Client ID</span>
+            <button class="btn secondary sm" id="open-google-config" type="button">Set Client ID</button>
+          </div>
+        </div>
+
+        <div class="divider">or sign in with email</div>
+
+        <div class="field">
+          <label for="email">Institutional Email</label>
+          <input id="email" name="email" type="email" placeholder="you@college.edu" required autocomplete="username" />
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" placeholder="••••••••" required autocomplete="current-password" />
+        </div>
+
+        <button class="btn w-full" id="login-submit-btn" type="submit">Continue to Dashboard</button>
+      </form>
+
+      <div class="demo-accounts">
+        <div class="muted small">Quick-fill institutional accounts (password: <code>password123</code>):</div>
+        <div>
+          <button type="button" class="demo-chip" data-fill-email="student@college.edu" data-fill-role="student">Student (Aarav)</button>
+          <button type="button" class="demo-chip" data-fill-email="faculty@college.edu" data-fill-role="faculty">Faculty (Prof. Nandini)</button>
+          <button type="button" class="demo-chip" data-fill-email="parent@college.edu" data-fill-role="parent">Parent (Rajesh)</button>
+          <button type="button" class="demo-chip" data-fill-email="admin@college.edu" data-fill-role="admin">Admin (admin@college.edu)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<main class="wrap">
+  <div class="grid grid-3">
+    <div class="panel">
+      <h3>Face verified</h3>
+      <p class="muted small">A live camera scan verifies the enrolled student before attendance is recorded.</p>
+    </div>
+    <div class="panel">
+      <h3>Inside the classroom</h3>
+      <p class="muted small">Each class has GPS coordinates and a radius in meters. Check-ins outside it are refused.</p>
+    </div>
+    <div class="panel">
+      <h3>Parents &amp; Admins connected</h3>
+      <p class="muted small">Successful, late and failed check-ins raise instant parent alerts, while admins manage all institutional records.</p>
+    </div>
+  </div>
+</main>
+
+<!-- Modal to set Google OAuth Client ID if not configured via .env -->
+<div class="modal-backdrop" id="google-config-modal" hidden>
+  <div class="modal">
+    <h3>Configure Google Sign-In Client ID</h3>
+    <p class="muted small">Paste your Google OAuth 2.0 Web Client ID (from Google Cloud Console &rarr; Credentials) or set <code>GOOGLE_CLIENT_ID</code> in Render environment variables.</p>
+    <div class="field mt">
+      <label for="google-client-id-input">Google Client ID</label>
+      <input id="google-client-id-input" placeholder="1234567890-abcdefg.apps.googleusercontent.com" />
+    </div>
+    <div class="row between mt">
+      <button class="btn ghost" id="close-google-config" type="button">Cancel</button>
+      <button class="btn" id="save-google-config" type="button">Save &amp; Render Google Button</button>
+    </div>
+  </div>
+</div>
+
+<footer class="app">Attenova · Smart Institutional Attendance Application</footer>
+<script src="js/app.js"></script>
+</body>
+</html>

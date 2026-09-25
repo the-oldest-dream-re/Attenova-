@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#1c2836" />
+<title>Faculty dashboard — Attenova</title>
+<meta name="description" content="Run live attendance sessions, watch check-ins arrive and download attendance reports." />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap" />
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body data-page="faculty">
+<header class="app">
+  <div class="bar">
+    <a class="logo" href="faculty.html">
+      <span class="mark">A</span>
+      <div><div class="name">Attenova</div><div class="tag">face + location verified</div></div>
+    </a>
+    <nav id="app-nav">
+      <a href="faculty.html" aria-current="page">Faculty</a>
+      <button class="btn-header install-btn" id="pwa-install-btn" type="button" hidden>Install App</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap" data-tabs>
+  <div class="row between">
+    <div>
+      <h1>Faculty dashboard</h1>
+      <p class="muted small" id="faculty-meta">Prof. Nandini Deshpande · Computer Science</p>
+    </div>
+  </div>
+
+  <div class="tabs mt">
+    <button class="active" data-target="classes" type="button">Classes</button>
+    <button data-target="live" type="button">Live check-ins</button>
+    <button data-target="reports" type="button">Reports</button>
+  </div>
+
+  <section class="tabpanel" data-tab="classes">
+    <div class="grid grid-2" id="classes-grid"></div>
+
+    <div class="panel mt">
+      <h3>Add a new class</h3>
+      <p class="muted small">Create a classroom geofence so students can check in when a session is live.</p>
+      <form id="add-class-form" class="mt">
+        <div class="grid grid-3">
+          <div class="field">
+            <label for="cname">Class name</label>
+            <input id="cname" placeholder="Computer Networks" required />
+          </div>
+          <div class="field">
+            <label for="croom">Room</label>
+            <input id="croom" placeholder="Room B-302" value="Room B-302" required />
+          </div>
+          <div class="field">
+            <label for="cschedule">Schedule</label>
+            <input id="cschedule" placeholder="10:00 – 11:00" value="10:00 – 11:00" />
+          </div>
+        </div>
+        <div class="grid grid-3">
+          <div class="field">
+            <label for="lat">Latitude</label>
+            <input id="lat" placeholder="19.0176" value="19.0176" required />
+          </div>
+          <div class="field">
+            <label for="lng">Longitude</label>
+            <input id="lng" placeholder="73.0860" value="73.0860" required />
+          </div>
+          <div class="field">
+            <label for="rad">Radius (m)</label>
+            <input id="rad" type="number" placeholder="60" value="60" required />
+          </div>
+        </div>
+        <div class="row">
+          <button class="btn" type="submit">Save class</button>
+          <button class="btn secondary" id="use-gps-btn" type="button">Use my current GPS</button>
+          <span class="small muted" id="class-save-status"></span>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <section class="tabpanel" data-tab="live" hidden>
+    <div class="panel mb">
+      <h3>Record manual attendance</h3>
+      <form id="manual-attendance-form" class="row mt">
+        <div style="flex:1;min-width:180px">
+          <label for="m-student">Student</label>
+          <select id="m-student"></select>
+        </div>
+        <div style="flex:1;min-width:180px">
+          <label for="m-class">Class</label>
+          <select id="m-class"></select>
+        </div>
+        <div style="flex:1;min-width:150px">
+          <label for="m-status">Status</label>
+          <select id="m-status">
+            <option value="Present">Present</option>
+            <option value="Late">Late</option>
+            <option value="Absent">Absent</option>
+          </select>
+        </div>
+        <div style="align-self:flex-end">
+          <button class="btn" type="submit">Add entry</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="panel">
+      <div class="row between mb">
+        <h3>Live check-ins feed</h3>
+        <span class="muted small" id="live-count-label"></span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Student</th><th>Roll no</th><th>Class</th><th>GPS Location &amp; Coordinates</th><th>Result</th><th>Distance</th><th>Time</th><th>GPS Photo</th></tr></thead>
+          <tbody id="faculty-live-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="tabpanel" data-tab="reports" hidden>
+    <div class="panel">
+      <h3>Attendance report</h3>
+      <div class="row mt">
+        <div style="flex:1;min-width:180px">
+          <label for="rclass">Class</label>
+          <select id="rclass"><option value="all">All Classes</option></select>
+        </div>
+        <div style="flex:1;min-width:150px"><label for="from">From</label><input id="from" type="date" value="2026-09-01" /></div>
+        <div style="flex:1;min-width:150px"><label for="to">To</label><input id="to" type="date" value="2026-12-31" /></div>
+      </div>
+      <div class="row mt">
+        <button class="btn" id="export-btn" type="button">Download CSV report</button>
+        <span class="small muted" id="export-status">Downloads as a spreadsheet-ready CSV file.</span>
+      </div>
+      <div class="table-wrap mt">
+        <table>
+          <thead><tr><th>Roll no</th><th>Student</th><th>Class</th><th>Date</th><th>GPS Location &amp; Coordinates</th><th>Status</th><th>Time</th><th>Distance</th><th>GPS Photo</th></tr></thead>
+          <tbody id="faculty-report-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="app">Attenova · faculty view</footer>
+<script src="js/app.js"></script>
+</body>
+</html>

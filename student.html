@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#1c2836" />
+<title>Student check-in — Attenova</title>
+<meta name="description" content="Check in to class with a face scan verified against your classroom location and stamped with a GPS Camera tag." />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap" />
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body data-page="student">
+<header class="app">
+  <div class="bar">
+    <a class="logo" href="student.html">
+      <span class="mark">A</span>
+      <div><div class="name">Attenova</div><div class="tag">face + location verified</div></div>
+    </a>
+    <nav id="app-nav">
+      <a href="student.html" aria-current="page">Student</a>
+      <button class="btn-header install-btn" id="pwa-install-btn" type="button" hidden>Install App</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="row between">
+    <div>
+      <h1 id="student-greeting">Hello, Aarav</h1>
+      <p class="muted small" id="student-meta">Roll no CS21-014 · Computer Science, Semester 5</p>
+    </div>
+    <span class="badge ok" id="student-face-badge">Face + GPS Camera Enabled</span>
+  </div>
+
+  <div class="grid grid-2 mt">
+    <div class="panel">
+      <div class="row between mb">
+        <div>
+          <h2 id="active-class-title">Check in to Data Structures</h2>
+          <p class="muted small" id="active-class-meta">09:00 – 10:00 · Room B-204 · session is live</p>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="student-class-select">Select active class</label>
+        <select id="student-class-select"></select>
+      </div>
+
+      <div class="google-fallback-bar mb" id="gps-calibration-box" style="flex-direction:column;align-items:flex-start;gap:6px">
+        <div class="row between" style="width:100%">
+          <strong style="color:var(--foreground);font-size:.82rem">📡 Live GPS Calibration &amp; Geofence Check</strong>
+          <button class="btn secondary sm" id="calibrate-gps-btn" type="button">Calibrate My GPS</button>
+        </div>
+        <div class="small" id="cal-student-loc"><strong>Your Actual Location:</strong> Click "Calibrate My GPS" or "Open camera" to lock onto your live GPS…</div>
+        <div class="small" id="cal-class-loc"><strong>Classroom Target:</strong> MGM College of Engineering and Technology, Kamothe, Panvel (19.0176° N, 73.0860° E · Radius 60 m)</div>
+        <div class="small" id="cal-distance-badge"><strong>Geofence Status:</strong> Waiting for GPS lock…</div>
+      </div>
+
+      <div class="camera" data-open-btn="#cam-open" data-capture-btn="#cam-capture" data-status="#cam-status">
+        <video playsinline muted></video>
+        <img class="captured-photo" id="captured-photo" hidden alt="GPS Stamped Attendance Snapshot" />
+        <div class="oval" hidden></div>
+        <div class="off">Camera is off — click "Open camera" to activate live GPS Map Stamp</div>
+        <div class="gps-overlay" id="gps-live-overlay" hidden>
+          <div class="gps-pin-box">📍</div>
+          <div>
+            <div class="gps-overlay-place" id="gps-live-place">Detecting place name…</div>
+            <div class="gps-overlay-coords" id="gps-live-coords">Lat: -- · Lng: --</div>
+            <div class="gps-overlay-time" id="gps-live-time">Live GPS Camera Tag</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row mt">
+        <button class="btn secondary" id="cam-open" type="button">Open camera</button>
+        <button class="btn" id="cam-capture" type="button" disabled>Verify &amp; stamp GPS photo</button>
+        <a class="btn ghost sm" id="download-stamped-photo" download="attenova-gps-checkin.jpg" hidden>Download GPS Photo</a>
+      </div>
+      <p class="small mt" id="cam-status">Your actual GPS location is calibrated and compared against the classroom radius. Check-ins outside the classroom radius are automatically rejected.</p>
+    </div>
+
+    <div class="grid">
+      <div class="panel">
+        <h3>This month</h3>
+        <div class="row between">
+          <div><div class="stat" id="stat-percent">92%</div><div class="muted small">attendance</div></div>
+          <div><div class="stat" id="stat-attended">22</div><div class="muted small">classes attended</div></div>
+          <div><div class="stat" id="stat-missed">2</div><div class="muted small">missed / rejected</div></div>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>Recent check-ins</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Date</th><th>Class</th><th>GPS Location &amp; Coordinates</th><th>Status</th><th>Snapshot</th></tr></thead>
+            <tbody id="recent-list"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="app">Attenova · student view</footer>
+<script src="js/app.js"></script>
+</body>
+</html>

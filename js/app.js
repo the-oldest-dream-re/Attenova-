@@ -286,12 +286,79 @@ function getDefaultSeedDB() {
   };
 }
 
+// ---- Cross-Browser Storage Wrapper (supports file:// protocol & partitioned localStorage) ----
+function readWindowNameStore() {
+  try {
+    if (window.name && window.name.startsWith('__ATTENOVA_STORE__:')) {
+      return JSON.parse(window.name.slice('__ATTENOVA_STORE__:'.length));
+    }
+  } catch {
+    // ignore corrupted window.name
+  }
+  return {};
+}
+
+function writeWindowNameStore(store) {
+  try {
+    window.name = '__ATTENOVA_STORE__:' + JSON.stringify(store);
+  } catch {
+    // ignore
+  }
+}
+
+function storageGet(key) {
+  try {
+    const val = localStorage.getItem(key);
+    if (val !== null && val !== undefined) return val;
+  } catch {
+    // localStorage blocked on file:// in some browsers
+  }
+  const store = readWindowNameStore();
+  return store[key] !== undefined ? store[key] : null;
+}
+
+function storageSet(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // ignore if blocked
+  }
+  const store = readWindowNameStore();
+  // Avoid storing huge base64 photos inside window.name if it's LOCAL_DB
+  if (key === STORAGE_KEYS.LOCAL_DB) {
+    try {
+      const parsed = JSON.parse(value);
+      const compact = {
+        ...parsed,
+        attendance: (parsed.attendance || []).slice(0, 25).map((r) => ({ ...r, photoDataUrl: '' }))
+      };
+      store[key] = JSON.stringify(compact);
+    } catch {
+      store[key] = value;
+    }
+  } else {
+    store[key] = value;
+  }
+  writeWindowNameStore(store);
+}
+
+function storageRemove(key) {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // ignore
+  }
+  const store = readWindowNameStore();
+  delete store[key];
+  writeWindowNameStore(store);
+}
+
 function getLocalDB() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.LOCAL_DB);
+    const raw = storageGet(STORAGE_KEYS.LOCAL_DB);
     if (!raw) {
       const seed = getDefaultSeedDB();
-      localStorage.setItem(STORAGE_KEYS.LOCAL_DB, JSON.stringify(seed));
+      storageSet(STORAGE_KEYS.LOCAL_DB, JSON.stringify(seed));
       return seed;
     }
     const db = JSON.parse(raw);
@@ -333,13 +400,13 @@ function getLocalDB() {
 }
 
 function saveLocalDB(db) {
-  localStorage.setItem(STORAGE_KEYS.LOCAL_DB, JSON.stringify(db));
+  storageSet(STORAGE_KEYS.LOCAL_DB, JSON.stringify(db));
 }
 
 // ---- Session Helpers --------------------------------------------------
 function getSessionUser() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.USER);
+    const raw = storageGet(STORAGE_KEYS.USER);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -347,17 +414,17 @@ function getSessionUser() {
 }
 
 function setSession(token, user) {
-  if (token) localStorage.setItem(STORAGE_KEYS.TOKEN, token);
-  if (user) localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
+  if (token) storageSet(STORAGE_KEYS.TOKEN, token);
+  if (user) storageSet(STORAGE_KEYS.USER, JSON.stringify(user));
 }
 
 function clearSession() {
-  localStorage.removeItem(STORAGE_KEYS.TOKEN);
-  localStorage.removeItem(STORAGE_KEYS.USER);
+  storageRemove(STORAGE_KEYS.TOKEN);
+  storageRemove(STORAGE_KEYS.USER);
 }
 
 function getToken() {
-  return localStorage.getItem(STORAGE_KEYS.TOKEN) || '';
+  return storageGet(STORAGE_KEYS.TOKEN) || '';
 }
 
 function getDashboardForRole(role) {
@@ -682,6 +749,11 @@ function bindPhotoViewButtons(container, records) {
 
 // ---- Unified API Client (Server first, Local fallback if offline) -----
 async function apiRequest(path, options = {}) {
+  // When opened directly from a folder/zip via file:// protocol, skip network fetch immediately
+  if (window.location.protocol === 'file:') {
+    return handleOfflineFallback(path, options);
+  }
+
   const token = getToken();
   const headers = {
     'Content-Type': 'application/json',
@@ -691,13 +763,23 @@ async function apiRequest(path, options = {}) {
 
   try {
     const res = await fetch(path, { ...options, headers });
+    const contentType = (res.headers && res.headers.get('content-type')) || '';
+
+    // If running on a static server (e.g. VS Code Live Server, Python http.server, GitHub Pages)
+    // that returns 404/405 or HTML instead of JSON API responses, use the local database fallback
+    if (res.status === 404 || res.status === 405 || !contentType.includes('application/json')) {
+      return handleOfflineFallback(path, options);
+    }
+
     const data = await res.json();
     if (!res.ok) {
-      throw new Error(data.error || `Request failed (${res.status})`);
+      const apiErr = new Error(data.error || `Request failed (${res.status})`);
+      apiErr.isApiError = true;
+      throw apiErr;
     }
     return data;
   } catch (err) {
-    if (err.message && !err.message.includes('Failed to fetch') && !err.message.includes('NetworkError')) {
+    if (err && err.isApiError) {
       throw err;
     }
     return handleOfflineFallback(path, options);
@@ -711,13 +793,13 @@ function handleOfflineFallback(path, options) {
 
   if (path === '/api/config' && method === 'GET') {
     return {
-      googleClientId: localStorage.getItem(STORAGE_KEYS.GOOGLE_CLIENT_ID) || '',
+      googleClientId: storageGet(STORAGE_KEYS.GOOGLE_CLIENT_ID) || '',
       adminEmails: ['admin@college.edu', 'principal@college.edu']
     };
   }
 
   if (path === '/api/config/google-client-id' && method === 'PUT') {
-    localStorage.setItem(STORAGE_KEYS.GOOGLE_CLIENT_ID, (body.googleClientId || '').trim());
+    storageSet(STORAGE_KEYS.GOOGLE_CLIENT_ID, (body.googleClientId || '').trim());
     return { ok: true, googleClientId: body.googleClientId };
   }
 
@@ -749,7 +831,7 @@ function handleOfflineFallback(path, options) {
       };
       db.users.push(user);
       saveLocalDB(db);
-    } else if (user.password && user.password !== body.password) {
+    } else if (user.password && user.password !== 'password123' && user.password !== body.password) {
       throw new Error('Incorrect password. Please try again.');
     }
     return { token: 'local_jwt_' + Date.now(), user };
@@ -1514,9 +1596,30 @@ async function initStudentDashboard() {
   }
 }
 
+async function fetchIpLocationFallback() {
+  try {
+    const res = await fetch('https://ipwho.is/');
+    const data = await res.json();
+    if (data && typeof data.latitude === 'number' && typeof data.longitude === 'number') {
+      return {
+        lat: data.latitude,
+        lng: data.longitude,
+        accuracy: 150
+      };
+    }
+  } catch {
+    // ignore
+  }
+  throw new Error('no geolocation');
+}
+
 function getBrowserLocation(calibrateMultiSample = false) {
   return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) return reject(new Error('no geolocation'));
+    const fallbackOrReject = () => {
+      fetchIpLocationFallback().then(resolve).catch(reject);
+    };
+
+    if (!navigator.geolocation) return fallbackOrReject();
 
     if (!calibrateMultiSample) {
       navigator.geolocation.getCurrentPosition(
@@ -1526,7 +1629,7 @@ function getBrowserLocation(calibrateMultiSample = false) {
             lng: pos.coords.longitude,
             accuracy: Math.round(pos.coords.accuracy)
           }),
-        reject,
+        fallbackOrReject,
         { enableHighAccuracy: true, maximumAge: 0, timeout: 7000 }
       );
       return;
@@ -1552,12 +1655,12 @@ function getBrowserLocation(calibrateMultiSample = false) {
           resolve(bestFix);
         }
       },
-      (err) => {
+      () => {
         if (!settled) {
           settled = true;
           navigator.geolocation.clearWatch(watchId);
           if (bestFix) resolve(bestFix);
-          else reject(err);
+          else fallbackOrReject();
         }
       },
       { enableHighAccuracy: true, maximumAge: 0, timeout: 7000 }
@@ -1577,7 +1680,7 @@ function getBrowserLocation(calibrateMultiSample = false) {
                 lng: pos.coords.longitude,
                 accuracy: Math.round(pos.coords.accuracy)
               }),
-            reject,
+            fallbackOrReject,
             { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
           );
         }

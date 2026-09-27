@@ -1320,34 +1320,311 @@ async function initStudentDashboard() {
     updateSelectedClassHeader();
   }
 
+  const filterClassSelect = document.querySelector('#student-filter-class');
+  const filterDateInput = document.querySelector('#student-filter-date');
+  const dateTodayBtn = document.querySelector('#student-date-today-btn');
+  const dateAllBtn = document.querySelector('#student-date-all-btn');
+
+  if (filterClassSelect) {
+    filterClassSelect.innerHTML =
+      `<option value="all">All Classes</option>` +
+      classes.map((c) => `<option value="${c.name}">${c.name} (${c.room})</option>`).join('');
+  }
+
+  function getPctBadgeClass(pct, total) {
+    if (!total) return 'info';
+    if (pct >= 75) return 'ok';
+    if (pct >= 60) return 'warn';
+    return 'bad';
+  }
+
   function renderStudentAttendance(records) {
     const myRecords = records.filter(
       (r) => !user || r.studentId === user.id || r.rollNo === (user.rollNo || 'CS21-014')
     );
-    const attended = myRecords.filter((r) => r.badgeType === 'ok' || r.badgeType === 'warn').length + 20;
-    const missed = myRecords.filter((r) => r.badgeType === 'bad').length + 1;
-    const pct = Math.round((attended / (attended + missed)) * 100);
 
-    document.querySelector('#stat-percent').textContent = `${pct}%`;
-    document.querySelector('#stat-attended').textContent = String(attended);
-    document.querySelector('#stat-missed').textContent = String(missed);
+    const attended = myRecords.filter((r) => r.badgeType === 'ok' || r.badgeType === 'warn').length;
+    const missed = myRecords.filter((r) => r.badgeType === 'bad').length;
+    const total = attended + missed;
+    const pct = total > 0 ? Math.round((attended / total) * 100) : 0;
 
+    const statPercentEl = document.querySelector('#stat-percent');
+    const statAttendedEl = document.querySelector('#stat-attended');
+    const statMissedEl = document.querySelector('#stat-missed');
+    const statTotalEl = document.querySelector('#stat-total');
+    const statEligibilityEl = document.querySelector('#stat-eligibility-badge');
+
+    if (statPercentEl) statPercentEl.textContent = `${pct}%`;
+    if (statAttendedEl) statAttendedEl.textContent = String(attended);
+    if (statMissedEl) statMissedEl.textContent = String(missed);
+    if (statTotalEl) statTotalEl.textContent = String(total);
+    if (statEligibilityEl) {
+      if (total === 0) {
+        statEligibilityEl.innerHTML = `<span class="badge info">No sessions logged yet</span>`;
+      } else if (pct >= 75) {
+        statEligibilityEl.innerHTML = `<span class="badge ok">✓ Eligible (≥ 75% Requirement)</span>`;
+      } else {
+        statEligibilityEl.innerHTML = `<span class="badge bad">⚠️ Below 75% Requirement (${pct}%)</span>`;
+      }
+    }
+
+    // 1. Recent Check-ins Table on Submit Tab
     const tbody = document.querySelector('#recent-list');
     if (tbody) {
-      tbody.innerHTML = myRecords
-        .map(
-          (r) => `
-          <tr>
-            <td>${r.displayDate || r.date}<div class="muted small">${r.time}</div></td>
-            <td>${r.className}</td>
-            <td>${renderGpsLocationCell(r)}</td>
-            <td><span class="badge ${r.badgeType || 'ok'}">${r.status}</span></td>
-            <td><button class="btn secondary sm" data-view-photo="${r.id}" type="button">View GPS Photo</button></td>
-          </tr>`
-        )
-        .join('');
-      bindPhotoViewButtons(tbody, myRecords);
+      if (myRecords.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="muted small">No attendance submissions yet. Use the camera on the left to submit your first attendance!</td></tr>`;
+      } else {
+        tbody.innerHTML = myRecords
+          .slice(0, 8)
+          .map(
+            (r) => `
+            <tr>
+              <td>${r.displayDate || r.date}<div class="muted small">${r.time}</div></td>
+              <td>${r.className}</td>
+              <td>${renderGpsLocationCell(r)}</td>
+              <td><span class="badge ${r.badgeType || 'ok'}">${r.status}</span></td>
+              <td><button class="btn secondary sm" data-view-photo="${r.id}" type="button">View GPS Photo</button></td>
+            </tr>`
+          )
+          .join('');
+        bindPhotoViewButtons(tbody, myRecords);
+      }
     }
+
+    // Build unified list of class names (all active classes + any class in student's records)
+    const classNamesSet = new Set(classes.map((c) => c.name));
+    myRecords.forEach((r) => {
+      if (r.className) classNamesSet.add(r.className);
+    });
+    const allClassNames = Array.from(classNamesSet);
+
+    const classStats = allClassNames.map((cName) => {
+      const clsObj = classes.find((c) => c.name === cName) || {};
+      const cLogs = myRecords.filter((r) => r.className === cName);
+      const cAttended = cLogs.filter((r) => r.badgeType === 'ok' || r.badgeType === 'warn').length;
+      const cMissed = cLogs.filter((r) => r.badgeType === 'bad').length;
+      const cTotal = cAttended + cMissed;
+      const cPct = cTotal > 0 ? Math.round((cAttended / cTotal) * 100) : 0;
+      return {
+        name: cName,
+        room: clsObj.room || 'Classroom',
+        schedule: clsObj.schedule || 'Scheduled',
+        attended: cAttended,
+        missed: cMissed,
+        total: cTotal,
+        pct: cPct
+      };
+    });
+
+    // 2. Quick Subject-Wise Percentage Bars on Submit Tab
+    const quickClassEl = document.querySelector('#quick-class-summary');
+    if (quickClassEl) {
+      quickClassEl.innerHTML = classStats
+        .map((cs) => {
+          const badgeCls = getPctBadgeClass(cs.pct, cs.total);
+          const barColor =
+            cs.total === 0
+              ? 'var(--border)'
+              : cs.pct >= 75
+              ? '#1f7a4c'
+              : cs.pct >= 60
+              ? '#b76e00'
+              : '#b42318';
+          return `
+            <div style="margin-bottom:12px">
+              <div class="row between" style="margin-bottom:4px">
+                <strong>${cs.name} <span class="muted small">(${cs.room})</span></strong>
+                <span class="badge ${badgeCls}">${cs.total > 0 ? `${cs.pct}% (${cs.attended}/${cs.total})` : '0 sessions'}</span>
+              </div>
+              <div style="height:8px;background:var(--surface-2,#e5e7eb);border-radius:99px;overflow:hidden">
+                <div style="height:100%;width:${cs.pct}%;background:${barColor};transition:width .3s"></div>
+              </div>
+            </div>
+          `;
+        })
+        .join('');
+    }
+
+    // 3. Class-Wise Attendance Summary Table
+    const classwiseSummaryTbody = document.querySelector('#student-classwise-summary-tbody');
+    if (classwiseSummaryTbody) {
+      classwiseSummaryTbody.innerHTML = classStats
+        .map((cs) => {
+          const badgeCls = getPctBadgeClass(cs.pct, cs.total);
+          const statusLabel =
+            cs.total === 0
+              ? 'No sessions yet'
+              : cs.pct >= 75
+              ? '✓ Safe (≥ 75%)'
+              : '⚠️ Shortage (< 75%)';
+          return `
+            <tr>
+              <td><strong>${cs.name}</strong></td>
+              <td class="muted small">${cs.room} · ${cs.schedule}</td>
+              <td><strong>${cs.attended}</strong></td>
+              <td>${cs.missed}</td>
+              <td>${cs.total}</td>
+              <td><span class="badge ${badgeCls}" style="font-size:.85rem">${cs.pct}%</span></td>
+              <td><span class="badge ${badgeCls}">${statusLabel}</span></td>
+            </tr>
+          `;
+        })
+        .join('');
+    }
+
+    // 4. Filtered Class-Wise Logs Table
+    function renderClasswiseFilteredLogs() {
+      const selectedClass = (filterClassSelect && filterClassSelect.value) || 'all';
+      const filtered =
+        selectedClass === 'all'
+          ? myRecords
+          : myRecords.filter((r) => r.className === selectedClass);
+
+      const fAttended = filtered.filter((r) => r.badgeType === 'ok' || r.badgeType === 'warn').length;
+      const fMissed = filtered.filter((r) => r.badgeType === 'bad').length;
+      const fTotal = fAttended + fMissed;
+      const fPct = fTotal > 0 ? Math.round((fAttended / fTotal) * 100) : 0;
+
+      const statsEl = document.querySelector('#classwise-filter-stats');
+      if (statsEl) {
+        const label = selectedClass === 'all' ? 'All Classes' : selectedClass;
+        statsEl.innerHTML = `<strong>${label}:</strong> ${fAttended} attended · ${fMissed} missed/rejected · <strong>${fPct}% Attendance</strong> (${fTotal} total records)`;
+      }
+
+      const logsTbody = document.querySelector('#student-classwise-logs-tbody');
+      if (logsTbody) {
+        if (filtered.length === 0) {
+          logsTbody.innerHTML = `<tr><td colspan="7" class="muted small">No attendance records found for this class.</td></tr>`;
+        } else {
+          logsTbody.innerHTML = filtered
+            .map(
+              (r) => `
+              <tr>
+                <td>${r.displayDate || r.date}</td>
+                <td>${r.time}</td>
+                <td><strong>${r.className}</strong></td>
+                <td>${renderGpsLocationCell(r)}</td>
+                <td>${r.distance || '—'}</td>
+                <td><span class="badge ${r.badgeType || 'ok'}">${r.status}</span></td>
+                <td><button class="btn secondary sm" data-view-photo="${r.id}" type="button">View GPS Photo</button></td>
+              </tr>`
+            )
+            .join('');
+          bindPhotoViewButtons(logsTbody, filtered);
+        }
+      }
+    }
+
+    if (filterClassSelect) {
+      filterClassSelect.onchange = renderClasswiseFilteredLogs;
+    }
+    renderClasswiseFilteredLogs();
+
+    // 5. Day-Wise Attendance Summary & Date-Filtered Table
+    const dayGroupsMap = new Map();
+    myRecords.forEach((r) => {
+      const dateKey = r.date || r.displayDate || 'Unknown';
+      if (!dayGroupsMap.has(dateKey)) {
+        dayGroupsMap.set(dateKey, {
+          dateKey,
+          displayDate: r.displayDate || r.date,
+          records: []
+        });
+      }
+      dayGroupsMap.get(dateKey).records.push(r);
+    });
+
+    const dayGroups = Array.from(dayGroupsMap.values()).sort((a, b) =>
+      b.dateKey.localeCompare(a.dateKey)
+    );
+
+    const daywiseSummaryTbody = document.querySelector('#student-daywise-summary-tbody');
+    if (daywiseSummaryTbody) {
+      if (dayGroups.length === 0) {
+        daywiseSummaryTbody.innerHTML = `<tr><td colspan="6" class="muted small">No daily attendance logs recorded yet.</td></tr>`;
+      } else {
+        daywiseSummaryTbody.innerHTML = dayGroups
+          .map((dg) => {
+            const dAttended = dg.records.filter(
+              (r) => r.badgeType === 'ok' || r.badgeType === 'warn'
+            ).length;
+            const dMissed = dg.records.filter((r) => r.badgeType === 'bad').length;
+            const dTotal = dAttended + dMissed;
+            const dPct = dTotal > 0 ? Math.round((dAttended / dTotal) * 100) : 0;
+            const subjects = Array.from(new Set(dg.records.map((r) => r.className))).join(', ');
+            const badgeCls = getPctBadgeClass(dPct, dTotal);
+            return `
+              <tr>
+                <td><strong>${dg.displayDate}</strong> <span class="muted small">(${dg.dateKey})</span></td>
+                <td><strong>${dAttended}</strong></td>
+                <td>${dMissed}</td>
+                <td>${dTotal}</td>
+                <td>${subjects}</td>
+                <td><span class="badge ${badgeCls}">${dPct}% (${dAttended}/${dTotal})</span></td>
+              </tr>
+            `;
+          })
+          .join('');
+      }
+    }
+
+    function renderDaywiseFilteredLogs() {
+      const selectedDate = (filterDateInput && filterDateInput.value) || '';
+      const filtered = !selectedDate
+        ? myRecords
+        : myRecords.filter((r) => r.date === selectedDate);
+
+      const dAttended = filtered.filter((r) => r.badgeType === 'ok' || r.badgeType === 'warn').length;
+      const dMissed = filtered.filter((r) => r.badgeType === 'bad').length;
+      const dTotal = dAttended + dMissed;
+      const dPct = dTotal > 0 ? Math.round((dAttended / dTotal) * 100) : 0;
+
+      const dayStatsEl = document.querySelector('#daywise-filter-stats');
+      if (dayStatsEl) {
+        const dateLabel = selectedDate ? `Date ${selectedDate}` : 'All Dates';
+        dayStatsEl.innerHTML = `<strong>${dateLabel}:</strong> ${dAttended} attended · ${dMissed} missed/rejected · <strong>${dPct}% Attendance</strong> (${dTotal} records)`;
+      }
+
+      const dayLogsTbody = document.querySelector('#student-daywise-logs-tbody');
+      if (dayLogsTbody) {
+        if (filtered.length === 0) {
+          dayLogsTbody.innerHTML = `<tr><td colspan="7" class="muted small">No attendance records found for ${selectedDate || 'the selected date'}. Click "Show All Dates" to view all history.</td></tr>`;
+        } else {
+          dayLogsTbody.innerHTML = filtered
+            .map(
+              (r) => `
+              <tr>
+                <td><strong>${r.displayDate || r.date}</strong><div class="muted small">${r.date || ''}</div></td>
+                <td>${r.time}</td>
+                <td><strong>${r.className}</strong></td>
+                <td>${renderGpsLocationCell(r)}</td>
+                <td>${r.distance || '—'}</td>
+                <td><span class="badge ${r.badgeType || 'ok'}">${r.status}</span></td>
+                <td><button class="btn secondary sm" data-view-photo="${r.id}" type="button">View GPS Photo</button></td>
+              </tr>`
+            )
+            .join('');
+          bindPhotoViewButtons(dayLogsTbody, filtered);
+        }
+      }
+    }
+
+    if (filterDateInput) {
+      filterDateInput.onchange = renderDaywiseFilteredLogs;
+    }
+    if (dateTodayBtn && filterDateInput) {
+      dateTodayBtn.onclick = () => {
+        filterDateInput.value = new Date().toISOString().slice(0, 10);
+        renderDaywiseFilteredLogs();
+      };
+    }
+    if (dateAllBtn && filterDateInput) {
+      dateAllBtn.onclick = () => {
+        filterDateInput.value = '';
+        renderDaywiseFilteredLogs();
+      };
+    }
+    renderDaywiseFilteredLogs();
   }
 
   renderStudentAttendance(allAttendance);

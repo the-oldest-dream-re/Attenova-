@@ -14,3 +14,5 @@ services:
         sync: false
       - key: ADMIN_EMAILS
         value: admin@college.edu
+      - key: ALLOWED_EMAIL_DOMAINS
+        value: mgmmumbai.ac.in,college.edu

@@ -786,6 +786,26 @@ async function apiRequest(path, options = {}) {
   }
 }
 
+function getLocalAllowedDomains() {
+  const saved = storageGet('attendly_allowed_domains');
+  if (saved) {
+    const parsed = saved
+      .split(',')
+      .map((d) => d.trim().toLowerCase().replace(/^@/, ''))
+      .filter(Boolean);
+    if (parsed.length > 0) return parsed;
+  }
+  return ['mgmmumbai.ac.in', 'college.edu'];
+}
+
+function isAllowedCollegeEmailLocal(email) {
+  const normalized = (email || '').trim().toLowerCase();
+  if (!normalized.includes('@')) return false;
+  if (['admin@college.edu', 'principal@college.edu'].includes(normalized)) return true;
+  const domain = normalized.split('@')[1];
+  return getLocalAllowedDomains().some((d) => domain === d || domain.endsWith('.' + d));
+}
+
 function handleOfflineFallback(path, options) {
   const method = (options.method || 'GET').toUpperCase();
   const body = options.body ? JSON.parse(options.body) : {};
@@ -794,7 +814,8 @@ function handleOfflineFallback(path, options) {
   if (path === '/api/config' && method === 'GET') {
     return {
       googleClientId: storageGet(STORAGE_KEYS.GOOGLE_CLIENT_ID) || '',
-      adminEmails: ['admin@college.edu', 'principal@college.edu']
+      adminEmails: ['admin@college.edu', 'principal@college.edu'],
+      allowedDomains: getLocalAllowedDomains()
     };
   }
 
@@ -803,11 +824,24 @@ function handleOfflineFallback(path, options) {
     return { ok: true, googleClientId: body.googleClientId };
   }
 
+  if (path === '/api/config/allowed-domains' && method === 'PUT') {
+    storageSet('attendly_allowed_domains', (body.allowedDomains || 'mgmmumbai.ac.in, college.edu').trim());
+    return { ok: true, allowedDomains: getLocalAllowedDomains() };
+  }
+
   if (path === '/api/auth/login' && method === 'POST') {
     const email = (body.email || '').trim().toLowerCase();
     const isAdmin =
       ['admin@college.edu', 'principal@college.edu'].includes(email) || email.startsWith('admin@');
     let user = db.users.find((u) => u.email.toLowerCase() === email);
+
+    if (!user && !isAllowedCollegeEmailLocal(email)) {
+      const allowedList = getLocalAllowedDomains().map((d) => `@${d}`).join(' or ');
+      throw new Error(
+        `Access restricted: Only official institutional email IDs (${allowedList}) are allowed to sign in.`
+      );
+    }
+
     if (!user) {
       const localPart = (email.split('@')[0] || 'Student')
         .replace(/^[a-z]\d+[_.-]?/i, '')
@@ -848,6 +882,14 @@ function handleOfflineFallback(path, options) {
     const isAdmin = ['admin@college.edu', 'principal@college.edu'].includes(email);
 
     let user = db.users.find((u) => u.email.toLowerCase() === email);
+
+    if (!user && !isAllowedCollegeEmailLocal(email)) {
+      const allowedList = getLocalAllowedDomains().map((d) => `@${d}`).join(' or ');
+      throw new Error(
+        `Access restricted: Your Google account (${email}) is not an institutional email. Please sign in with ${allowedList}.`
+      );
+    }
+
     if (!user) {
       const assignedRole = isAdmin ? 'admin' : body.selectedRole || 'student';
       user = {
@@ -2369,10 +2411,18 @@ if (currentPage === 'admin') {
 
 async function initAdminPortal() {
   let state = await apiRequest('/api/data');
-  const config = await apiRequest('/api/config').catch(() => ({ googleClientId: '' }));
+  const config = await apiRequest('/api/config').catch(() => ({
+    googleClientId: '',
+    allowedDomains: ['mgmmumbai.ac.in', 'college.edu']
+  }));
 
   const googleInput = document.querySelector('#admin-google-client-id');
   if (googleInput) googleInput.value = config.googleClientId || '';
+
+  const domainsInput = document.querySelector('#admin-allowed-domains');
+  if (domainsInput && Array.isArray(config.allowedDomains)) {
+    domainsInput.value = config.allowedDomains.join(', ');
+  }
 
   function renderAdminAll() {
     const users = state.users || [];
@@ -2537,6 +2587,20 @@ async function initAdminPortal() {
         addClassForm.reset();
         renderAdminAll();
       }
+    });
+  }
+
+  // Save Allowed Institutional Domains
+  const saveDomainsBtn = document.querySelector('#admin-save-domains-btn');
+  if (saveDomainsBtn) {
+    saveDomainsBtn.addEventListener('click', async () => {
+      const val = (domainsInput ? domainsInput.value : '').trim();
+      const res = await apiRequest('/api/config/allowed-domains', {
+        method: 'PUT',
+        body: JSON.stringify({ allowedDomains: val })
+      });
+      const listStr = (res.allowedDomains || []).map((d) => `@${d}`).join(', ');
+      document.querySelector('#admin-domains-status').textContent = `Saved — only ${listStr} emails can sign in.`;
     });
   }
 

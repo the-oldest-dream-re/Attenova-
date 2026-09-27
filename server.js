@@ -51,13 +51,35 @@ function authenticateToken(req, res, next) {
   });
 }
 
+const DEFAULT_ALLOWED_DOMAINS = (process.env.ALLOWED_EMAIL_DOMAINS || 'mgmmumbai.ac.in,college.edu')
+  .split(',')
+  .map((d) => d.trim().toLowerCase().replace(/^@/, ''))
+  .filter(Boolean);
+
+function getAllowedDomains(db) {
+  if (db && db.settings && Array.isArray(db.settings.allowedDomains) && db.settings.allowedDomains.length > 0) {
+    return db.settings.allowedDomains;
+  }
+  return DEFAULT_ALLOWED_DOMAINS;
+}
+
+function isAllowedInstitutionalEmail(email, db) {
+  const normalized = (email || '').trim().toLowerCase();
+  if (!normalized.includes('@')) return false;
+  if (ENV_ADMIN_EMAILS.includes(normalized)) return true;
+  const domain = normalized.split('@')[1];
+  const allowedDomains = getAllowedDomains(db);
+  return allowedDomains.some((d) => domain === d || domain.endsWith('.' + d));
+}
+
 // ---- Public Config Endpoint (for Google Identity Services & PWA) ----
 app.get('/api/config', (req, res) => {
   const db = loadDB();
   const googleClientId = process.env.GOOGLE_CLIENT_ID || (db.settings && db.settings.googleClientId) || '';
   res.json({
     googleClientId,
-    adminEmails: ENV_ADMIN_EMAILS
+    adminEmails: ENV_ADMIN_EMAILS,
+    allowedDomains: getAllowedDomains(db)
   });
 });
 
@@ -68,6 +90,19 @@ app.put('/api/config/google-client-id', (req, res) => {
   db.settings.googleClientId = (googleClientId || '').trim();
   saveDB(db);
   res.json({ ok: true, googleClientId: db.settings.googleClientId });
+});
+
+app.put('/api/config/allowed-domains', (req, res) => {
+  const { allowedDomains } = req.body;
+  const parsed = String(allowedDomains || '')
+    .split(',')
+    .map((d) => d.trim().toLowerCase().replace(/^@/, ''))
+    .filter(Boolean);
+  const db = loadDB();
+  db.settings = db.settings || {};
+  db.settings.allowedDomains = parsed.length > 0 ? parsed : DEFAULT_ALLOWED_DOMAINS;
+  saveDB(db);
+  res.json({ ok: true, allowedDomains: db.settings.allowedDomains });
 });
 
 // ---- Authentication Endpoints ---------------------------------------
@@ -83,7 +118,7 @@ function formatNameFromEmail(email) {
   return parts.map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join(' ');
 }
 
-// 1. Email + Password Sign-In (with bcrypt verification & auto-enrollment for new institutional emails)
+// 1. Email + Password Sign-In (with college domain verification & bcrypt check)
 app.post('/api/auth/login', (req, res) => {
   const { email, password, role } = req.body;
   if (!email || !password) {
@@ -96,8 +131,16 @@ app.post('/api/auth/login', (req, res) => {
   const db = loadDB();
   let user = db.users.find((u) => u.email.toLowerCase() === normalizedEmail);
 
+  // Block non-institutional emails unless pre-enrolled by Admin
+  if (!user && !isAllowedInstitutionalEmail(normalizedEmail, db)) {
+    const allowedList = getAllowedDomains(db).map((d) => `@${d}`).join(' or ');
+    return res.status(403).json({
+      error: `Access restricted: Only official institutional email IDs (${allowedList}) are allowed to sign in.`
+    });
+  }
+
   if (!user) {
-    // Automatically enroll new institutional email into the database
+    // Automatically enroll verified institutional email into the database
     const assignedRole = isAdminEmail
       ? 'admin'
       : ['student', 'faculty', 'parent', 'admin'].includes(role)
@@ -149,7 +192,7 @@ app.post('/api/auth/login', (req, res) => {
   res.json({ token, user: safeUser });
 });
 
-// 2. Real Google Sign-In (verifies Google ID token JWT via google-auth-library)
+// 2. Real Google Sign-In (verifies Google ID token JWT & enforces institutional domain)
 app.post('/api/auth/google', async (req, res) => {
   const { credential, selectedRole } = req.body;
   if (!credential) {
@@ -178,6 +221,14 @@ app.post('/api/auth/google', async (req, res) => {
     const isAdminEmail = ENV_ADMIN_EMAILS.includes(email);
 
     let user = db.users.find((u) => u.email.toLowerCase() === email);
+
+    // Block personal Gmail/external Google accounts unless pre-enrolled by Admin
+    if (!user && !isAllowedInstitutionalEmail(email, db)) {
+      const allowedList = getAllowedDomains(db).map((d) => `@${d}`).join(' or ');
+      return res.status(403).json({
+        error: `Access restricted: Your Google account (${email}) is not an institutional email. Please sign in with ${allowedList}.`
+      });
+    }
 
     if (!user) {
       // Auto-register the Google-authenticated user into the institutional database

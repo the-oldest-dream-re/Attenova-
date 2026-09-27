@@ -152,8 +152,21 @@
     </div>
   </section>
 
-  <!-- TAB 4: Google OAuth Settings -->
+  <!-- TAB 4: Google OAuth & Domain Restriction Settings -->
   <section class="tabpanel" data-tab="oauth" hidden>
+    <div class="panel mb">
+      <h3>College Email Domain Restriction</h3>
+      <p class="muted small">Only users with an email ending in these institutional domains (or users manually added by the Admin in Tab 1) are allowed to sign in via Email or Google Sign-In. Personal <code>@gmail.com</code> or external accounts are automatically blocked.</p>
+      <div class="field mt">
+        <label for="admin-allowed-domains">Allowed Institutional Domains (comma-separated)</label>
+        <input id="admin-allowed-domains" placeholder="mgmmumbai.ac.in, college.edu" value="mgmmumbai.ac.in, college.edu" />
+      </div>
+      <div class="row">
+        <button class="btn" id="admin-save-domains-btn" type="button">Save Allowed Domains</button>
+        <span class="small muted" id="admin-domains-status"></span>
+      </div>
+    </div>
+
     <div class="panel">
       <h3>Real Google Sign-In Configuration</h3>
       <p class="muted small">Attenova uses Google Identity Services (<code>https://accounts.google.com/gsi/client</code>) and verifies ID tokens on the server with <code>google-auth-library</code>. Set your Google OAuth 2.0 Web Client ID below or via the <code>GOOGLE_CLIENT_ID</code> environment variable on Render.com.</p>

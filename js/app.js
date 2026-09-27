@@ -1264,10 +1264,11 @@ async function initLoginPage() {
           }
         });
         container.innerHTML = '';
+        const btnWidth = Math.min(320, Math.max(220, (container.parentElement && container.parentElement.clientWidth) ? container.parentElement.clientWidth - 8 : 280));
         window.google.accounts.id.renderButton(container, {
           theme: 'outline',
           size: 'large',
-          width: 320,
+          width: btnWidth,
           text: 'continue_with',
           shape: 'rectangular'
         });
@@ -1807,16 +1808,27 @@ async function initStudentDashboard() {
     // Calibrate immediately on page load so the student sees their actual location & distance
     refreshLiveGpsOverlay(true);
 
+    let currentFacingMode = 'user';
+    const flipCamBtn = document.querySelector('#cam-flip');
+
     async function openCamera() {
       if (capturedImg) {
         capturedImg.hidden = true;
         video.hidden = false;
       }
       if (downloadLink) downloadLink.hidden = true;
+      if (stream) {
+        stream.getTracks().forEach((t) => t.stop());
+        stream = null;
+      }
 
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user' },
+          video: {
+            facingMode: { ideal: currentFacingMode },
+            width: { ideal: 720 },
+            height: { ideal: 540 }
+          },
           audio: false
         });
         video.srcObject = stream;
@@ -1826,7 +1838,7 @@ async function initStudentDashboard() {
         if (gpsOverlay) gpsOverlay.hidden = false;
         openBtn.disabled = true;
         captureBtn.disabled = false;
-        status.textContent = 'Camera & Live GPS Tag active — click "Verify & stamp GPS photo".';
+        status.textContent = 'Camera & Live GPS Tag active — tap "Verify & submit attendance".';
       } catch {
         off.hidden = false;
         off.textContent = 'Simulated Camera Ready — Live GPS Tag active below';
@@ -1834,10 +1846,17 @@ async function initStudentDashboard() {
         if (gpsOverlay) gpsOverlay.hidden = false;
         openBtn.disabled = true;
         captureBtn.disabled = false;
-        status.textContent = 'Live GPS Tag ready — click "Verify & stamp GPS photo".';
+        status.textContent = 'Live GPS Tag ready — tap "Verify & submit attendance".';
       }
 
       refreshLiveGpsOverlay(true);
+    }
+
+    if (flipCamBtn) {
+      flipCamBtn.addEventListener('click', () => {
+        currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+        openCamera();
+      });
     }
 
     function stopCameraStreamOnly() {
@@ -1846,7 +1865,7 @@ async function initStudentDashboard() {
       oval.hidden = true;
       if (gpsOverlay) gpsOverlay.hidden = true;
       openBtn.disabled = false;
-      openBtn.textContent = 'Retake / Open camera';
+      openBtn.textContent = '📷 Retake / Open camera';
       captureBtn.disabled = true;
     }
 

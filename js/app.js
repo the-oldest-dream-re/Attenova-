@@ -1695,16 +1695,20 @@ async function initStudentDashboard() {
     const calibrateGpsBtn = document.querySelector('#calibrate-gps-btn');
 
     let stream = null;
+    let continuousWatchId = null;
+    let lastHardwareFix = null;
     let liveGpsState = {
       lat: 19.0176,
       lng: 73.0860,
       accuracy: 10,
       distanceMeters: 0,
       isInsideGeofence: true,
+      hasRealLock: false,
       locationName: `Room B-204 · ${DEFAULT_COLLEGE_PLACE}`
     };
 
-    async function refreshLiveGpsOverlay(forceCalibrate = false) {
+    // Update UI and liveGpsState whenever a hardware GPS fix arrives
+    async function applyGpsPosition(pos) {
       const cls = getSelectedClass();
       const campusLat = cls && cls.lat ? Number(cls.lat) : 19.0176;
       const campusLng = cls && cls.lng ? Number(cls.lng) : 73.0860;
@@ -1712,46 +1716,13 @@ async function initStudentDashboard() {
       const roomLabel = cls && cls.room ? cls.room : 'Room B-204';
       const classTargetDesc = `${roomLabel} · ${DEFAULT_COLLEGE_PLACE} (${formatCoords(campusLat, campusLng)} · Radius ${allowedRadius}m)`;
 
-      if (calClassLocEl) {
-        calClassLocEl.innerHTML = `<strong>Classroom Target:</strong> ${classTargetDesc}`;
-      }
-      if (calStudentLocEl) {
-        calStudentLocEl.innerHTML = `<strong>Your Actual Location:</strong> Calibrating high-accuracy GPS sensor…`;
-      }
-      if (calDistanceBadgeEl) {
-        calDistanceBadgeEl.innerHTML = `<strong>Geofence Status:</strong> <span class="badge warn">Calibrating GPS…</span>`;
-      }
-      if (calibrateGpsBtn) {
-        calibrateGpsBtn.disabled = true;
-        calibrateGpsBtn.textContent = '📡 Calibrating…';
-      }
-      if (gpsPlaceEl) gpsPlaceEl.textContent = 'Calibrating exact GPS coordinates & actual place name…';
-
-      let pos;
-      try {
-        pos = await getBrowserLocation(forceCalibrate);
-      } catch (err) {
-        if (calStudentLocEl) {
-          calStudentLocEl.innerHTML =
-            `<strong>Your Actual Location:</strong> GPS permission denied or unavailable — please allow browser Location access.`;
-        }
-        if (calDistanceBadgeEl) {
-          calDistanceBadgeEl.innerHTML = `<strong>Geofence Status:</strong> <span class="badge bad">GPS Unavailable</span>`;
-        }
-        if (calibrateGpsBtn) {
-          calibrateGpsBtn.disabled = false;
-          calibrateGpsBtn.textContent = '🎯 Re-Calibrate Exact GPS';
-        }
-        return;
-      }
-
       const useLat = pos.lat;
       const useLng = pos.lng;
       const accuracy = pos.accuracy || 15;
       const distanceMeters = calculateDistanceMeters(useLat, useLng, campusLat, campusLng);
       const isInsideGeofence = distanceMeters <= allowedRadius;
 
-      // Reverse-geocode the student's ACTUAL coordinates (shows real home/street name when away from college)
+      // Reverse-geocode the student's ACTUAL coordinates
       const actualPlace = await reverseGeocodePlace(useLat, useLng);
       const resolvedLocationName = isInsideGeofence
         ? `${roomLabel} · ${actualPlace}`
@@ -1763,11 +1734,12 @@ async function initStudentDashboard() {
         accuracy,
         distanceMeters,
         isInsideGeofence,
+        hasRealLock: true,
         locationName: resolvedLocationName
       };
 
       if (calStudentLocEl) {
-        calStudentLocEl.innerHTML = `<strong>Your Actual Location:</strong> 📍 ${resolvedLocationName} (${formatCoords(useLat, useLng)} · ±${accuracy}m)`;
+        calStudentLocEl.innerHTML = `<strong>Your Actual Location:</strong> 📍 ${resolvedLocationName} (${formatCoords(useLat, useLng)} · GPS ±${accuracy}m)`;
       }
       if (calClassLocEl) {
         calClassLocEl.innerHTML = `<strong>Classroom Target:</strong> 🏫 ${classTargetDesc}`;
@@ -1799,13 +1771,105 @@ async function initStudentDashboard() {
       }
     }
 
+    // Start a persistent background watchPosition so mobile hardware GPS continuously refines satellite accuracy
+    function startContinuousHardwareGpsWatch() {
+      if (!navigator.geolocation) return;
+      if (continuousWatchId !== null) {
+        navigator.geolocation.clearWatch(continuousWatchId);
+      }
+      continuousWatchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          const fix = {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            accuracy: Math.round(pos.coords.accuracy || 15),
+            timestamp: Date.now()
+          };
+          // Ignore coarse mobile-ISP gateway fixes that default to Pune (18.52, 73.85) when accuracy is poor
+          if (isCoarsePuneIspFix(fix.lat, fix.lng, fix.accuracy)) {
+            return;
+          }
+          if (
+            !lastHardwareFix ||
+            fix.accuracy <= lastHardwareFix.accuracy + 10 ||
+            fix.timestamp - lastHardwareFix.timestamp > 8000
+          ) {
+            lastHardwareFix = fix;
+            applyGpsPosition(fix);
+          }
+        },
+        () => {
+          // Handled by explicit refreshLiveGpsOverlay call
+        },
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
+      );
+    }
+
+    async function refreshLiveGpsOverlay(forceCalibrate = false) {
+      const cls = getSelectedClass();
+      const campusLat = cls && cls.lat ? Number(cls.lat) : 19.0176;
+      const campusLng = cls && cls.lng ? Number(cls.lng) : 73.0860;
+      const allowedRadius = cls && cls.radius ? Number(cls.radius) : 60;
+      const roomLabel = cls && cls.room ? cls.room : 'Room B-204';
+      const classTargetDesc = `${roomLabel} · ${DEFAULT_COLLEGE_PLACE} (${formatCoords(campusLat, campusLng)} · Radius ${allowedRadius}m)`;
+
+      if (calClassLocEl) {
+        calClassLocEl.innerHTML = `<strong>Classroom Target:</strong> 🏫 ${classTargetDesc}`;
+      }
+
+      // If switching class dropdown and we already have a calibrated GPS fix, recalculate immediately
+      if (!forceCalibrate && lastHardwareFix) {
+        await applyGpsPosition(lastHardwareFix);
+        return;
+      }
+
+      if (calStudentLocEl) {
+        calStudentLocEl.innerHTML = `<strong>Your Actual Location:</strong> Locking onto your phone/device hardware GPS satellites…`;
+      }
+      if (calDistanceBadgeEl) {
+        calDistanceBadgeEl.innerHTML = `<strong>Geofence Status:</strong> <span class="badge warn">Acquiring Precise GPS…</span>`;
+      }
+      if (calibrateGpsBtn) {
+        calibrateGpsBtn.disabled = true;
+        calibrateGpsBtn.textContent = '📡 Locking GPS…';
+      }
+      if (gpsPlaceEl) gpsPlaceEl.textContent = 'Locking onto exact hardware GPS coordinates…';
+
+      startContinuousHardwareGpsWatch();
+
+      try {
+        const pos = await getBrowserLocation(true);
+        lastHardwareFix = { ...pos, timestamp: Date.now() };
+        await applyGpsPosition(pos);
+      } catch (err) {
+        if (lastHardwareFix) {
+          await applyGpsPosition(lastHardwareFix);
+          return;
+        }
+        if (calStudentLocEl) {
+          calStudentLocEl.innerHTML =
+            `<strong>Your Actual Location:</strong> ⚠️ Precise GPS unavailable. On mobile, please turn ON your phone's <strong>Location / GPS</strong> and enable <strong>"Precise Location"</strong> for your browser, then tap <strong>Re-Calibrate Exact GPS</strong>.`;
+        }
+        if (calDistanceBadgeEl) {
+          calDistanceBadgeEl.innerHTML = `<strong>Geofence Status:</strong> <span class="badge bad">Enable Phone GPS &amp; Tap Re-Calibrate</span>`;
+        }
+        if (calibrateGpsBtn) {
+          calibrateGpsBtn.disabled = false;
+          calibrateGpsBtn.textContent = '🎯 Re-Calibrate Exact GPS';
+        }
+      }
+    }
+
     if (calibrateGpsBtn) {
-      calibrateGpsBtn.addEventListener('click', () => refreshLiveGpsOverlay(true));
+      calibrateGpsBtn.addEventListener('click', () => {
+        lastHardwareFix = null;
+        refreshLiveGpsOverlay(true);
+      });
     }
     if (classSelect) {
       classSelect.addEventListener('change', () => refreshLiveGpsOverlay(false));
     }
-    // Calibrate immediately on page load so the student sees their actual location & distance
+    // Start hardware GPS calibration immediately on page load
     refreshLiveGpsOverlay(true);
 
     let currentFacingMode = 'user';
@@ -1870,7 +1934,7 @@ async function initStudentDashboard() {
     }
 
     async function captureAndVerify() {
-      status.textContent = 'Calibrating GPS & stamping actual location onto attendance photo…';
+      status.textContent = 'Calibrating precise hardware GPS & stamping actual location onto photo…';
       captureBtn.disabled = true;
 
       await refreshLiveGpsOverlay(true);
@@ -1937,34 +2001,25 @@ async function initStudentDashboard() {
 
     openBtn.addEventListener('click', openCamera);
     captureBtn.addEventListener('click', captureAndVerify);
-    window.addEventListener('beforeunload', stopCameraStreamOnly);
+    window.addEventListener('beforeunload', () => {
+      stopCameraStreamOnly();
+      if (continuousWatchId !== null && navigator.geolocation) {
+        navigator.geolocation.clearWatch(continuousWatchId);
+      }
+    });
   }
 }
 
-async function fetchIpLocationFallback() {
-  try {
-    const res = await fetch('https://ipwho.is/');
-    const data = await res.json();
-    if (data && typeof data.latitude === 'number' && typeof data.longitude === 'number') {
-      return {
-        lat: data.latitude,
-        lng: data.longitude,
-        accuracy: 150
-      };
-    }
-  } catch {
-    // ignore
-  }
-  throw new Error('no geolocation');
+// Mobile carrier IPs in Navi Mumbai / Panvel / Maharashtra route through telecom gateways in Pune (18.5204, 73.8567).
+// Filter out coarse ISP/cell-gateway guesses that land on Pune with poor accuracy so we wait for real GPS satellites.
+function isCoarsePuneIspFix(lat, lng, accuracy) {
+  const nearPuneCenter = Math.abs(lat - 18.5204) < 0.06 && Math.abs(lng - 73.8567) < 0.06;
+  return nearPuneCenter && (!accuracy || accuracy > 80);
 }
 
 function getBrowserLocation(calibrateMultiSample = false) {
   return new Promise((resolve, reject) => {
-    const fallbackOrReject = () => {
-      fetchIpLocationFallback().then(resolve).catch(reject);
-    };
-
-    if (!navigator.geolocation) return fallbackOrReject();
+    if (!navigator.geolocation) return reject(new Error('Geolocation not supported'));
 
     if (!calibrateMultiSample) {
       navigator.geolocation.getCurrentPosition(
@@ -1972,65 +2027,79 @@ function getBrowserLocation(calibrateMultiSample = false) {
           resolve({
             lat: pos.coords.latitude,
             lng: pos.coords.longitude,
-            accuracy: Math.round(pos.coords.accuracy)
+            accuracy: Math.round(pos.coords.accuracy || 15)
           }),
-        fallbackOrReject,
-        { enableHighAccuracy: true, maximumAge: 0, timeout: 7000 }
+        reject,
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
       );
       return;
     }
 
-    // Multi-sample high-accuracy GPS calibration: collect fresh sensor readings and keep the sharpest fix
+    // Multi-sample high-accuracy hardware GPS calibration:
+    // Collects fresh GPS satellite readings and picks the sharpest accuracy lock (ignoring coarse Pune ISP gateway fixes)
     let bestFix = null;
     let settled = false;
+    let settleTimer = null;
+
+    const finishWithBest = () => {
+      if (settled) return;
+      settled = true;
+      if (settleTimer) clearTimeout(settleTimer);
+      navigator.geolocation.clearWatch(watchId);
+      if (bestFix) {
+        resolve(bestFix);
+      } else {
+        navigator.geolocation.getCurrentPosition(
+          (pos) =>
+            resolve({
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+              accuracy: Math.round(pos.coords.accuracy || 15)
+            }),
+          reject,
+          { enableHighAccuracy: true, maximumAge: 0, timeout: 12000 }
+        );
+      }
+    };
+
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
         const fix = {
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
-          accuracy: Math.round(pos.coords.accuracy)
+          accuracy: Math.round(pos.coords.accuracy || 15)
         };
+
+        // Skip coarse ISP gateway guesses pointing to Pune Kasba Peth while hardware GPS warms up
+        if (isCoarsePuneIspFix(fix.lat, fix.lng, fix.accuracy)) {
+          return;
+        }
+
         if (!bestFix || fix.accuracy < bestFix.accuracy) {
           bestFix = fix;
         }
-        // If we get a sharp GPS lock (<= 25m accuracy), resolve immediately
-        if (fix.accuracy <= 25 && !settled) {
-          settled = true;
-          navigator.geolocation.clearWatch(watchId);
-          resolve(bestFix);
+
+        // Start the 3.5-second refinement countdown only AFTER the user has accepted the permission prompt and first real fix arrives
+        if (!settleTimer) {
+          settleTimer = setTimeout(finishWithBest, 3500);
+        }
+
+        // If we achieve a sharp satellite lock (<= 20m accuracy), resolve immediately!
+        if (fix.accuracy <= 20 && !settled) {
+          finishWithBest();
         }
       },
-      () => {
+      (err) => {
         if (!settled) {
           settled = true;
+          if (settleTimer) clearTimeout(settleTimer);
           navigator.geolocation.clearWatch(watchId);
           if (bestFix) resolve(bestFix);
-          else fallbackOrReject();
+          else reject(err);
         }
       },
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 7000 }
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
     );
-
-    setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        navigator.geolocation.clearWatch(watchId);
-        if (bestFix) {
-          resolve(bestFix);
-        } else {
-          navigator.geolocation.getCurrentPosition(
-            (pos) =>
-              resolve({
-                lat: pos.coords.latitude,
-                lng: pos.coords.longitude,
-                accuracy: Math.round(pos.coords.accuracy)
-              }),
-            fallbackOrReject,
-            { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
-          );
-        }
-      }
-    }, 2200);
   });
 }
 

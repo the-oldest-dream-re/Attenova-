@@ -496,6 +496,16 @@ app.post('/api/attendance', authenticateToken, (req, res) => {
   res.status(201).json({ record });
 });
 
+// Delete an attendance record (Faculty or Admin cleanup of duplicate/rejected check-ins)
+app.delete('/api/attendance/:id', authenticateToken, (req, res) => {
+  const db = loadDB();
+  const idx = (db.attendance || []).findIndex((r) => r.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Attendance record not found' });
+  db.attendance.splice(idx, 1);
+  saveDB(db);
+  res.json({ ok: true });
+});
+
 // Mark all parent alerts read
 app.post('/api/alerts/mark-read', authenticateToken, (req, res) => {
   const db = loadDB();

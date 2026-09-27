@@ -1005,6 +1005,13 @@ function handleOfflineFallback(path, options) {
     return { record };
   }
 
+  if (path.startsWith('/api/attendance/') && method === 'DELETE') {
+    const id = path.split('/').pop();
+    db.attendance = (db.attendance || []).filter((r) => r.id !== id);
+    saveLocalDB(db);
+    return { ok: true };
+  }
+
   if (path === '/api/alerts/mark-read' && method === 'POST') {
     db.alerts.forEach((a) => (a.unread = false));
     saveLocalDB(db);
@@ -1771,11 +1778,13 @@ async function initFacultyDashboard() {
           <td>${r.distance || '—'}</td>
           <td>${r.time}</td>
           <td><button class="btn secondary sm" data-view-photo="${r.id}" type="button">View GPS Photo</button></td>
+          <td><button class="btn danger sm" data-delete-attendance="${r.id}" type="button">Delete</button></td>
         </tr>
       `
         )
         .join('');
       bindPhotoViewButtons(liveTbody, attendance);
+      bindDeleteAttendanceButtons(liveTbody);
     }
 
     // 4. Render Reports Tab
@@ -1786,6 +1795,26 @@ async function initFacultyDashboard() {
         classes.map((c) => `<option value="${c.name}">${c.name}</option>`).join('');
     }
     renderReportTable();
+  }
+
+  function bindDeleteAttendanceButtons(container) {
+    if (!container) return;
+    container.querySelectorAll('[data-delete-attendance]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.deleteAttendance;
+        btn.disabled = true;
+        btn.textContent = 'Deleting…';
+        try {
+          await apiRequest(`/api/attendance/${id}`, { method: 'DELETE' });
+          state.attendance = (state.attendance || []).filter((r) => r.id !== id);
+          renderFacultyView();
+        } catch (err) {
+          btn.disabled = false;
+          btn.textContent = 'Delete';
+          alert(err.message || 'Could not delete attendance record.');
+        }
+      });
+    });
   }
 
   function getFilteredReportRows() {
@@ -1818,11 +1847,13 @@ async function initFacultyDashboard() {
         <td>${r.time}</td>
         <td>${r.distance || '—'}</td>
         <td><button class="btn secondary sm" data-view-photo="${r.id}" type="button">View GPS Photo</button></td>
+        <td><button class="btn danger sm" data-delete-attendance="${r.id}" type="button">Delete</button></td>
       </tr>
     `
       )
       .join('');
     bindPhotoViewButtons(reportTbody, rows);
+    bindDeleteAttendanceButtons(reportTbody);
   }
 
   ['#rclass', '#from', '#to'].forEach((sel) => {
@@ -2157,11 +2188,21 @@ async function initAdminPortal() {
           <td><span class="badge ${r.badgeType || 'ok'}">${r.status}</span></td>
           <td>${r.distance || '—'}</td>
           <td><button class="btn secondary sm" data-view-photo="${r.id}" type="button">View GPS Photo</button></td>
+          <td><button class="btn danger sm" data-delete-attendance="${r.id}" type="button">Delete</button></td>
         </tr>
       `
         )
         .join('');
       bindPhotoViewButtons(logsTbody, logs);
+
+      logsTbody.querySelectorAll('[data-delete-attendance]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const id = btn.dataset.deleteAttendance;
+          await apiRequest(`/api/attendance/${id}`, { method: 'DELETE' });
+          state.attendance = (state.attendance || []).filter((r) => r.id !== id);
+          renderAdminAll();
+        });
+      });
     }
   }
 

@@ -401,6 +401,8 @@ app.delete('/api/users/:id', authenticateToken, (req, res) => {
   if (db.users[idx].id === req.user.id) {
     return res.status(400).json({ error: 'You cannot delete your own active account.' });
   }
+  db.deletedIds = Array.isArray(db.deletedIds) ? db.deletedIds : [];
+  if (!db.deletedIds.includes(req.params.id)) db.deletedIds.push(req.params.id);
   db.users.splice(idx, 1);
   saveDB(db);
   res.json({ ok: true });
@@ -452,6 +454,8 @@ app.delete('/api/classes/:id', authenticateToken, (req, res) => {
   const db = loadDB();
   const idx = db.classes.findIndex((c) => c.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'Class not found' });
+  db.deletedIds = Array.isArray(db.deletedIds) ? db.deletedIds : [];
+  if (!db.deletedIds.includes(req.params.id)) db.deletedIds.push(req.params.id);
   db.classes.splice(idx, 1);
   saveDB(db);
   res.json({ ok: true });
@@ -591,6 +595,8 @@ app.delete('/api/attendance/:id', authenticateToken, (req, res) => {
   const db = loadDB();
   const idx = (db.attendance || []).findIndex((r) => r.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'Attendance record not found' });
+  db.deletedIds = Array.isArray(db.deletedIds) ? db.deletedIds : [];
+  if (!db.deletedIds.includes(req.params.id)) db.deletedIds.push(req.params.id);
   db.attendance.splice(idx, 1);
   saveDB(db);
   res.json({ ok: true });
@@ -626,9 +632,113 @@ app.put('/api/preferences', authenticateToken, (req, res) => {
   res.json({ ok: true, preferences: user ? user.preferences : req.body });
 });
 
+// ---- Automatic Client-to-Server State Re-Hydration (/api/sync) -------
+// Restores users, reference face photos, classes, and attendance logs cached in client localStorage
+// whenever a Render free-tier container wakes up from a cold start or redeploy.
+app.post('/api/sync', authenticateToken, (req, res) => {
+  const { users = [], classes = [], attendance = [], deletedIds = [] } = req.body || {};
+  const db = loadDB();
+  db.deletedIds = Array.from(new Set([...(db.deletedIds || []), ...(Array.isArray(deletedIds) ? deletedIds : [])]));
+  const deletedSet = new Set(db.deletedIds);
+  let changed = false;
+
+  // 1. Remove any items that were deleted on the client
+  const beforeUsers = db.users.length;
+  db.users = db.users.filter((u) => !deletedSet.has(u.id));
+  if (db.users.length !== beforeUsers) changed = true;
+
+  const beforeClasses = db.classes.length;
+  db.classes = db.classes.filter((c) => !deletedSet.has(c.id));
+  if (db.classes.length !== beforeClasses) changed = true;
+
+  const beforeAtt = db.attendance.length;
+  db.attendance = db.attendance.filter((a) => !deletedSet.has(a.id));
+  if (db.attendance.length !== beforeAtt) changed = true;
+
+  // 2. Merge client users & reference face photos
+  if (Array.isArray(users)) {
+    users.forEach((cu) => {
+      if (!cu || !cu.email || deletedSet.has(cu.id)) return;
+      const existing = db.users.find(
+        (u) => u.id === cu.id || u.email.toLowerCase() === cu.email.toLowerCase()
+      );
+      if (!existing) {
+        db.users.push({
+          ...cu,
+          passwordHash: cu.passwordHash || bcrypt.hashSync(cu.password || 'password123', 10)
+        });
+        changed = true;
+      } else if (cu.facePhotoUrl && !existing.facePhotoUrl) {
+        existing.facePhotoUrl = cu.facePhotoUrl;
+        existing.faceDescriptor = cu.faceDescriptor || existing.faceDescriptor;
+        existing.faceEnrolled = true;
+        changed = true;
+      }
+    });
+  }
+
+  // 3. Merge client classes
+  if (Array.isArray(classes)) {
+    classes.forEach((cc) => {
+      if (!cc || !cc.id || deletedSet.has(cc.id)) return;
+      const existing = db.classes.find((c) => c.id === cc.id);
+      if (!existing) {
+        db.classes.push(cc);
+        changed = true;
+      }
+    });
+  }
+
+  // 4. Merge client attendance logs
+  if (Array.isArray(attendance)) {
+    attendance.forEach((ca) => {
+      if (!ca || !ca.id || deletedSet.has(ca.id)) return;
+      if (!db.attendance.some((a) => a.id === ca.id)) {
+        db.attendance.push(ca);
+        changed = true;
+      }
+    });
+    if (changed) {
+      db.attendance.sort((a, b) => String(b.id).localeCompare(String(a.id)));
+    }
+  }
+
+  if (changed) {
+    saveDB(db);
+  }
+
+  const currentUser =
+    db.users.find((u) => u.id === req.user.id) ||
+    (req.user.email && db.users.find((u) => u.email.toLowerCase() === req.user.email.toLowerCase()));
+
+  res.json({
+    ok: true,
+    currentUser: sanitizeUser(currentUser),
+    users: db.users.map(sanitizeUser),
+    classes: db.classes,
+    attendance: db.attendance,
+    alerts: db.alerts,
+    deletedIds: db.deletedIds
+  });
+});
+
+// Health check endpoint (used by Render & self keep-alive ping)
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', uptime: Math.round(process.uptime()) });
+});
+
 // Serve static frontend files
 app.use(express.static(__dirname));
 
 app.listen(PORT, () => {
   console.log(`Attenova Smart Attendance Server running at http://localhost:${PORT}`);
+
+  // Keep Render Free Tier container awake by pinging RENDER_EXTERNAL_URL every 13 minutes
+  const externalUrl = process.env.RENDER_EXTERNAL_URL;
+  if (externalUrl) {
+    const pingUrl = `${externalUrl.replace(/\/$/, '')}/api/health`;
+    setInterval(() => {
+      fetch(pingUrl).catch(() => {});
+    }, 13 * 60 * 1000);
+  }
 });

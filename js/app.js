@@ -1063,7 +1063,98 @@ function bindPhotoViewButtons(container, records) {
   });
 }
 
-// ---- Unified API Client (Server first, Local fallback if offline) -----
+// ---- Mirror Server Mutations to Persistent Browser Storage (survives Render 15-min spin-down) ----
+function mirrorServerMutationToLocalDB(path, options, data) {
+  try {
+    const method = ((options && options.method) || 'GET').toUpperCase();
+    const db = getLocalDB();
+    db.deletedIds = Array.isArray(db.deletedIds) ? db.deletedIds : [];
+
+    if ((path === '/api/auth/login' || path === '/api/auth/google') && method === 'POST' && data && data.user) {
+      const idx = db.users.findIndex(
+        (u) => u.id === data.user.id || (u.email && data.user.email && u.email.toLowerCase() === data.user.email.toLowerCase())
+      );
+      if (idx === -1) {
+        db.users.push(data.user);
+      } else {
+        db.users[idx] = { ...db.users[idx], ...data.user };
+      }
+      saveLocalDB(db);
+      return;
+    }
+
+    if (path === '/api/users' && method === 'POST' && data && data.user) {
+      const idx = db.users.findIndex(
+        (u) => u.id === data.user.id || (u.email && data.user.email && u.email.toLowerCase() === data.user.email.toLowerCase())
+      );
+      if (idx === -1) db.users.push(data.user);
+      else db.users[idx] = { ...db.users[idx], ...data.user };
+      saveLocalDB(db);
+      return;
+    }
+
+    if (path.startsWith('/api/users/') && path.endsWith('/face') && method === 'PUT' && data && data.user) {
+      const idx = db.users.findIndex(
+        (u) => u.id === data.user.id || (u.email && data.user.email && u.email.toLowerCase() === data.user.email.toLowerCase())
+      );
+      if (idx === -1) db.users.push(data.user);
+      else db.users[idx] = { ...db.users[idx], ...data.user };
+      saveLocalDB(db);
+      return;
+    }
+
+    if (path.startsWith('/api/users/') && method === 'DELETE') {
+      const id = path.split('/').pop();
+      db.users = (db.users || []).filter((u) => u.id !== id);
+      if (id && !db.deletedIds.includes(id)) db.deletedIds.push(id);
+      saveLocalDB(db);
+      return;
+    }
+
+    if (path === '/api/classes' && method === 'POST' && data && data.classItem) {
+      const idx = db.classes.findIndex((c) => c.id === data.classItem.id);
+      if (idx === -1) db.classes.push(data.classItem);
+      else db.classes[idx] = { ...db.classes[idx], ...data.classItem };
+      saveLocalDB(db);
+      return;
+    }
+
+    if (path.endsWith('/toggle-session') && method === 'POST' && data && data.classItem) {
+      const idx = db.classes.findIndex((c) => c.id === data.classItem.id);
+      if (idx !== -1) db.classes[idx] = { ...db.classes[idx], ...data.classItem };
+      saveLocalDB(db);
+      return;
+    }
+
+    if (path.startsWith('/api/classes/') && method === 'DELETE') {
+      const id = path.split('/').pop();
+      db.classes = (db.classes || []).filter((c) => c.id !== id);
+      if (id && !db.deletedIds.includes(id)) db.deletedIds.push(id);
+      saveLocalDB(db);
+      return;
+    }
+
+    if (path === '/api/attendance' && method === 'POST' && data && data.record) {
+      db.attendance = db.attendance || [];
+      if (!db.attendance.some((r) => r.id === data.record.id)) {
+        db.attendance.unshift(data.record);
+      }
+      saveLocalDB(db);
+      return;
+    }
+
+    if (path.startsWith('/api/attendance/') && method === 'DELETE') {
+      const id = path.split('/').pop();
+      db.attendance = (db.attendance || []).filter((r) => r.id !== id);
+      if (id && !db.deletedIds.includes(id)) db.deletedIds.push(id);
+      saveLocalDB(db);
+    }
+  } catch {
+    // ignore local mirror errors
+  }
+}
+
+// ---- Unified API Client (Server first + Auto-Sync on Render wake-up, Local fallback if offline) -----
 async function apiRequest(path, options = {}) {
   // When opened directly from a folder/zip via file:// protocol, skip network fetch immediately
   if (window.location.protocol === 'file:') {
@@ -1093,6 +1184,50 @@ async function apiRequest(path, options = {}) {
       apiErr.isApiError = true;
       throw apiErr;
     }
+
+    // When fetching /api/data, automatically sync browser localStorage snapshot with the server
+    // so if Render's free container spun down after 15 mins of inactivity, all stored users,
+    // reference face photos, classes, and attendance records are transparently restored.
+    const method = (options.method || 'GET').toUpperCase();
+    if (path === '/api/data' && method === 'GET') {
+      try {
+        const localDb = getLocalDB();
+        const syncRes = await fetch('/api/sync', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            users: localDb.users || [],
+            classes: localDb.classes || [],
+            attendance: localDb.attendance || [],
+            deletedIds: localDb.deletedIds || []
+          })
+        });
+        if (syncRes.ok) {
+          const syncedData = await syncRes.json();
+          saveLocalDB({
+            users: syncedData.users || data.users || [],
+            classes: syncedData.classes || data.classes || [],
+            attendance: syncedData.attendance || data.attendance || [],
+            alerts: syncedData.alerts || data.alerts || [],
+            deletedIds: localDb.deletedIds || []
+          });
+          return syncedData;
+        }
+      } catch {
+        // If /api/sync fails for any reason, still save and return server data
+      }
+      const localDb = getLocalDB();
+      saveLocalDB({
+        users: data.users || [],
+        classes: data.classes || [],
+        attendance: data.attendance || [],
+        alerts: data.alerts || [],
+        deletedIds: localDb.deletedIds || []
+      });
+      return data;
+    }
+
+    mirrorServerMutationToLocalDB(path, options, data);
     return data;
   } catch (err) {
     if (err && err.isApiError) {
@@ -1287,6 +1422,8 @@ function handleOfflineFallback(path, options) {
   if (path.startsWith('/api/users/') && method === 'DELETE') {
     const id = path.split('/').pop();
     db.users = db.users.filter((u) => u.id !== id);
+    db.deletedIds = Array.isArray(db.deletedIds) ? db.deletedIds : [];
+    if (id && !db.deletedIds.includes(id)) db.deletedIds.push(id);
     saveLocalDB(db);
     return { ok: true };
   }
@@ -1320,6 +1457,8 @@ function handleOfflineFallback(path, options) {
   if (path.startsWith('/api/classes/') && method === 'DELETE') {
     const id = path.split('/').pop();
     db.classes = db.classes.filter((c) => c.id !== id);
+    db.deletedIds = Array.isArray(db.deletedIds) ? db.deletedIds : [];
+    if (id && !db.deletedIds.includes(id)) db.deletedIds.push(id);
     saveLocalDB(db);
     return { ok: true };
   }
@@ -1397,6 +1536,8 @@ function handleOfflineFallback(path, options) {
   if (path.startsWith('/api/attendance/') && method === 'DELETE') {
     const id = path.split('/').pop();
     db.attendance = (db.attendance || []).filter((r) => r.id !== id);
+    db.deletedIds = Array.isArray(db.deletedIds) ? db.deletedIds : [];
+    if (id && !db.deletedIds.includes(id)) db.deletedIds.push(id);
     saveLocalDB(db);
     return { ok: true };
   }

@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<meta name="theme-color" content="#1c2836" />
+<meta name="theme-color" content="#4f46e5" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <meta name="mobile-web-app-capable" content="yes" />
 <title>Attenova — Face &amp; Location Verified Attendance</title>
 <meta name="description" content="Attendance verified by face match and classroom location, with separate sign-ins for faculty, students, parents, and institutional admins." />
@@ -38,30 +38,30 @@
 <section class="hero">
   <div class="wrap">
     <div>
-      <span class="pill">Smart Institutional Attendance</span>
-      <h1>Attendance that proves who was there, and where.</h1>
-      <p class="lead">Students check in with a quick face scan inside the classroom. If the face or the location doesn't match, the check-in is rejected and parents are told right away.</p>
+      <span class="pill">✨ Next-Gen Campus Attendance</span>
+      <h1>Attendance that proves <span class="text-gradient">who was there, and where.</span></h1>
+      <p class="lead">Students check in with a quick face scan inside the classroom. If the face or the GPS geofence doesn't match, the check-in is automatically rejected and parents are notified in real time.</p>
       <div class="row mt">
-        <span class="badge info">Bcrypt + JWT Secured</span>
-        <span class="badge info">Google Identity Services</span>
-        <span class="badge info">Installable PWA</span>
+        <span class="badge info">🔒 Bcrypt + JWT Secured</span>
+        <span class="badge ok">📍 Precision GPS Geofence</span>
+        <span class="badge info">📱 Installable Mobile App</span>
       </div>
     </div>
 
     <div class="panel">
-      <h2>Sign in to Attenova</h2>
-      <p class="muted small">Sign in with your institutional email or Google account. Admin emails route automatically to the Admin Portal.</p>
+      <h2>Welcome back</h2>
+      <p class="muted small">Sign in with your verified college email or Google account.</p>
 
       <div id="login-alert" class="auth-msg error" hidden></div>
 
       <form id="login-form">
         <div class="field">
-          <label>I am signing in as</label>
+          <label>Select your workspace</label>
           <div class="role-pills">
             <input type="radio" id="role-student" name="role" value="student" checked />
             <label for="role-student">Student</label>
             <input type="radio" id="role-faculty" name="role" value="faculty" />
-            <label for="role-faculty">Teacher / Faculty</label>
+            <label for="role-faculty">Faculty</label>
             <input type="radio" id="role-parent" name="role" value="parent" />
             <label for="role-parent">Parent</label>
           </div>
@@ -71,15 +71,15 @@
         <div class="google-auth-box">
           <div id="google-signin-button"></div>
           <div id="google-setup-bar" class="google-fallback-bar" hidden>
-            <span>Google Sign-In ready — add your Google OAuth Client ID</span>
+            <span>Google OAuth ready — configure Client ID</span>
             <button class="btn secondary sm" id="open-google-config" type="button">Set Client ID</button>
           </div>
         </div>
 
-        <div class="divider">or sign in with email</div>
+        <div class="divider">or continue with email</div>
 
         <div class="field">
-          <label for="email">College Institutional Email <span class="muted small">(@mgmmumbai.ac.in / @college.edu)</span></label>
+          <label for="email">Institutional Email <span class="muted small">(@mgmmumbai.ac.in / @college.edu)</span></label>
           <input id="email" name="email" type="email" placeholder="s25_student@mgmmumbai.ac.in" required autocomplete="username" />
         </div>
         <div class="field">
@@ -87,16 +87,16 @@
           <input id="password" name="password" type="password" placeholder="••••••••" required autocomplete="current-password" />
         </div>
 
-        <button class="btn w-full" id="login-submit-btn" type="submit">Continue to Dashboard</button>
+        <button class="btn w-full" id="login-submit-btn" type="submit">Continue to Workspace &rarr;</button>
       </form>
 
       <div class="demo-accounts">
-        <div class="muted small">Quick-fill institutional accounts (password: <code>password123</code>):</div>
+        <div class="muted small">Quick-fill demo accounts (password: <code>password123</code>):</div>
         <div>
-          <button type="button" class="demo-chip" data-fill-email="student@college.edu" data-fill-role="student">Student (Aarav)</button>
-          <button type="button" class="demo-chip" data-fill-email="faculty@college.edu" data-fill-role="faculty">Faculty (Prof. Nandini)</button>
-          <button type="button" class="demo-chip" data-fill-email="parent@college.edu" data-fill-role="parent">Parent (Rajesh)</button>
-          <button type="button" class="demo-chip" data-fill-email="admin@college.edu" data-fill-role="admin">Admin (admin@college.edu)</button>
+          <button type="button" class="demo-chip" data-fill-email="student@college.edu" data-fill-role="student">🎓 Student</button>
+          <button type="button" class="demo-chip" data-fill-email="faculty@college.edu" data-fill-role="faculty">👩‍🏫 Faculty</button>
+          <button type="button" class="demo-chip" data-fill-email="parent@college.edu" data-fill-role="parent">👪 Parent</button>
+          <button type="button" class="demo-chip" data-fill-email="admin@college.edu" data-fill-role="admin">⚡ Admin</button>
         </div>
       </div>
     </div>
@@ -106,16 +106,19 @@
 <main class="wrap">
   <div class="grid grid-3">
     <div class="panel">
-      <h3>Face verified</h3>
-      <p class="muted small">A live camera scan verifies the enrolled student before attendance is recorded.</p>
+      <div class="feature-icon">📸</div>
+      <h3>Biometric Face Match</h3>
+      <p class="muted small">A live camera snapshot with an embedded GPS timestamp verifies the student in seconds before attendance is logged.</p>
     </div>
     <div class="panel">
-      <h3>Inside the classroom</h3>
-      <p class="muted small">Each class has GPS coordinates and a radius in meters. Check-ins outside it are refused.</p>
+      <div class="feature-icon">📍</div>
+      <h3>Precision Classroom Geofence</h3>
+      <p class="muted small">Every lecture room has calibrated GPS coordinates and a strict meter radius. Check-ins outside the room are blocked automatically.</p>
     </div>
     <div class="panel">
-      <h3>Parents &amp; Admins connected</h3>
-      <p class="muted small">Successful, late and failed check-ins raise instant parent alerts, while admins manage all institutional records.</p>
+      <div class="feature-icon">🔔</div>
+      <h3>Real-Time Parent &amp; Admin Sync</h3>
+      <p class="muted small">Present, late, and out-of-bounds attempts trigger instant parent notifications and live faculty &amp; admin analytics.</p>
     </div>
   </div>
 </main>

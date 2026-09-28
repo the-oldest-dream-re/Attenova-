@@ -1469,18 +1469,18 @@ async function initStudentDashboard() {
             cs.total === 0
               ? 'var(--border)'
               : cs.pct >= 75
-              ? '#1f7a4c'
+              ? 'linear-gradient(90deg, #10b981, #059669)'
               : cs.pct >= 60
-              ? '#b76e00'
-              : '#b42318';
+              ? 'linear-gradient(90deg, #f59e0b, #d97706)'
+              : 'linear-gradient(90deg, #ef4444, #dc2626)';
           return `
-            <div style="margin-bottom:12px">
-              <div class="row between" style="margin-bottom:4px">
-                <strong>${cs.name} <span class="muted small">(${cs.room})</span></strong>
+            <div style="margin-bottom:14px">
+              <div class="row between" style="margin-bottom:6px">
+                <strong style="font-size:.88rem">${cs.name} <span class="muted small">(${cs.room})</span></strong>
                 <span class="badge ${badgeCls}">${cs.total > 0 ? `${cs.pct}% (${cs.attended}/${cs.total})` : '0 sessions'}</span>
               </div>
-              <div style="height:8px;background:var(--surface-2,#e5e7eb);border-radius:99px;overflow:hidden">
-                <div style="height:100%;width:${cs.pct}%;background:${barColor};transition:width .3s"></div>
+              <div style="height:8px;background:var(--surface-2,#f1f5f9);border-radius:99px;overflow:hidden">
+                <div style="height:100%;width:${cs.pct}%;background:${barColor};border-radius:99px;transition:width .35s ease"></div>
               </div>
             </div>
           `;

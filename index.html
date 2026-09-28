@@ -79,8 +79,12 @@
         <div class="divider">or continue with email</div>
 
         <div class="field">
-          <label for="email">Institutional Email <span class="muted small">(@mgmmumbai.ac.in / @college.edu)</span></label>
+          <label for="email" id="login-email-label">Institutional Email <span class="muted small">(@mgmmumbai.ac.in / @college.edu)</span></label>
           <input id="email" name="email" type="email" placeholder="s25_student@mgmmumbai.ac.in" required autocomplete="username" />
+        </div>
+        <div class="field" id="parent-student-link-field" hidden>
+          <label for="parent-student-identifier">Child's Roll No or Student Email <span class="muted small">(links your parent account)</span></label>
+          <input id="parent-student-identifier" name="studentIdentifier" placeholder="e.g. CS21-014 or s25_student@mgmmumbai.ac.in" />
         </div>
         <div class="field">
           <label for="password">Password</label>

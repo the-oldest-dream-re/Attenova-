@@ -33,28 +33,124 @@
 <main class="wrap">
   <div class="row between">
     <div>
-      <h1 id="parent-heading">Aarav's attendance</h1>
+      <h1 id="parent-heading">Student Attendance Overview</h1>
       <p class="muted small" id="parent-subheading">Computer Science, Semester 5 · roll no CS21-014</p>
     </div>
-    <a class="btn secondary" href="preferences.html">Alert settings</a>
+    <a class="btn secondary" href="preferences.html">🔔 Alert settings</a>
   </div>
 
-  <div class="grid grid-3 mt">
-    <div class="panel"><div class="stat" id="parent-stat-pct">92%</div><div class="muted small">this month</div></div>
-    <div class="panel"><div class="stat" id="parent-stat-ratio">22 / 24</div><div class="muted small">classes attended</div></div>
-    <div class="panel"><div class="stat"><span id="unread-count">3</span></div><div class="muted small">new alerts</div></div>
+  <!-- Linked Student (Child / Ward) Relationship Card -->
+  <div class="panel mt" id="parent-linked-student-card">
+    <div class="row between" style="gap:16px;align-items:center">
+      <div class="row" style="gap:14px;align-items:center">
+        <div class="face-avatar-box" id="parent-child-avatar-box">
+          <img id="parent-child-photo" alt="Linked Student Reference Face" hidden />
+          <span class="face-avatar-placeholder" id="parent-child-placeholder">🎓</span>
+        </div>
+        <div>
+          <div class="row" style="gap:8px;align-items:center">
+            <strong style="font-size:1.05rem;color:var(--foreground)" id="parent-child-name">Aarav Menon</strong>
+            <span class="badge info" id="parent-child-roll-badge">Roll: CS21-014</span>
+            <span class="badge ok" id="parent-child-face-badge">Face ID Enrolled</span>
+          </div>
+          <div class="muted small" id="parent-child-meta" style="margin-top:3px">
+            student@college.edu · Computer Science · Semester 5
+          </div>
+        </div>
+      </div>
+
+      <div style="flex:1;max-width:520px;min-width:260px">
+        <label for="parent-student-select" style="margin-bottom:4px">👨‍👩‍👧 Linked Child / Student (Switch or Link by Roll No / Email)</label>
+        <div class="row" style="gap:8px;flex-wrap:nowrap">
+          <select id="parent-student-select" style="flex:1;min-width:140px"></select>
+          <input id="parent-student-input" placeholder="Or enter Roll No / Email…" style="flex:1;min-width:130px" />
+          <button class="btn sm" id="parent-link-student-btn" type="button">Link Student</button>
+        </div>
+        <div class="small muted" id="parent-link-status" style="margin-top:4px"></div>
+      </div>
+    </div>
   </div>
 
+  <!-- Real-Time Attendance Summary Stats for Linked Student -->
+  <div class="grid grid-4 mt">
+    <div class="panel">
+      <div class="stat" id="parent-stat-pct">0%</div>
+      <div class="muted small">overall attendance %</div>
+      <div class="mt" id="parent-stat-eligibility"><span class="badge info">75% target</span></div>
+    </div>
+    <div class="panel">
+      <div class="stat" id="parent-stat-ratio">0 / 0</div>
+      <div class="muted small">classes attended (present/late)</div>
+    </div>
+    <div class="panel">
+      <div class="stat" id="parent-stat-missed">0</div>
+      <div class="muted small">missed / rejected check-ins</div>
+    </div>
+    <div class="panel">
+      <div class="stat"><span id="unread-count">0</span></div>
+      <div class="muted small">unread alerts for your child</div>
+    </div>
+  </div>
+
+  <!-- Real-Time Parent Alerts for Linked Student -->
   <div class="panel mt">
     <div class="row between mb">
-      <h3>Alerts</h3>
-      <button class="btn ghost" id="mark-read" type="button">Mark all read</button>
+      <div>
+        <h3>Real-time check-in alerts</h3>
+        <p class="muted small">Instant notifications whenever your linked child checks in or a check-in is rejected.</p>
+      </div>
+      <button class="btn ghost sm" id="mark-read" type="button">Mark all read</button>
     </div>
     <div class="grid" style="gap:10px" id="parent-alerts-list"></div>
   </div>
 
+  <!-- Subject-Wise Attendance Breakdown for Linked Student -->
   <div class="panel mt">
-    <h3>Attendance history</h3>
+    <div class="row between mb">
+      <div>
+        <h3>Subject-wise attendance percentage</h3>
+        <p class="muted small">Track your child's attendance across each enrolled subject.</p>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Subject / Class</th>
+            <th>Room &amp; Schedule</th>
+            <th>Attended</th>
+            <th>Missed / Rejected</th>
+            <th>Total Sessions</th>
+            <th>Attendance %</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="parent-classwise-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Full Attendance History for Linked Student -->
+  <div class="panel mt">
+    <div class="row between mb">
+      <div>
+        <h3>Attendance history &amp; GPS camera proof</h3>
+        <p class="muted small" id="parent-history-count">Showing all recorded sessions for your child</p>
+      </div>
+      <div class="row" style="gap:10px;align-items:flex-end">
+        <div style="min-width:170px">
+          <label for="parent-filter-class">Filter by Class</label>
+          <select id="parent-filter-class">
+            <option value="all">All Classes</option>
+          </select>
+        </div>
+        <div>
+          <label for="parent-filter-date">Filter by Date</label>
+          <input type="date" id="parent-filter-date" />
+        </div>
+        <button class="btn ghost sm" id="parent-filter-reset" type="button">Show All</button>
+      </div>
+    </div>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Date</th><th>Class</th><th>GPS Location &amp; Coordinates</th><th>Status</th><th>Time</th><th>GPS Photo</th></tr></thead>

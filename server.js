@@ -118,9 +118,36 @@ function formatNameFromEmail(email) {
   return parts.map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join(' ');
 }
 
+// Helper: find a student in db.users by id, rollNo, email, or name
+function findStudentByQuery(db, query) {
+  const q = String(query || '').trim().toLowerCase();
+  if (!q) return null;
+  const students = (db.users || []).filter((u) => u.role === 'student');
+  return (
+    students.find((s) => s.id && s.id.toLowerCase() === q) ||
+    students.find((s) => s.rollNo && s.rollNo.toLowerCase() === q) ||
+    students.find((s) => s.email && s.email.toLowerCase() === q) ||
+    students.find((s) => s.name && s.name.toLowerCase() === q) ||
+    null
+  );
+}
+
+// Helper: establish a two-way link between a parent user and a student user
+function linkParentAndStudent(parentUser, studentUser) {
+  if (!parentUser || !studentUser) return;
+  parentUser.studentId = studentUser.id;
+  parentUser.studentRollNo = studentUser.rollNo || 'CS21-014';
+  parentUser.studentEmail = studentUser.email;
+  parentUser.studentName = studentUser.name;
+
+  studentUser.parentId = parentUser.id;
+  studentUser.parentEmail = parentUser.email;
+  studentUser.parentName = parentUser.name;
+}
+
 // 1. Email + Password Sign-In (with college domain verification & bcrypt check)
 app.post('/api/auth/login', (req, res) => {
-  const { email, password, role } = req.body;
+  const { email, password, role, studentIdentifier } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: 'Please enter both email and password.' });
   }
@@ -131,22 +158,40 @@ app.post('/api/auth/login', (req, res) => {
   const db = loadDB();
   let user = db.users.find((u) => u.email.toLowerCase() === normalizedEmail);
 
-  // Block non-institutional emails unless pre-enrolled by Admin
-  if (!user && !isAllowedInstitutionalEmail(normalizedEmail, db)) {
+  // Check if a student already pre-linked this parent's email or if the parent provided a valid student Roll No / Institutional Email
+  const matchedStudentForParent =
+    role === 'parent'
+      ? findStudentByQuery(db, studentIdentifier) ||
+        (db.users || []).find(
+          (u) => u.role === 'student' && u.parentEmail && u.parentEmail.toLowerCase() === normalizedEmail
+        )
+      : null;
+
+  // Block non-institutional emails unless pre-enrolled by Admin or signing in as a Parent linked to a valid student
+  if (!user && !isAllowedInstitutionalEmail(normalizedEmail, db) && !matchedStudentForParent) {
     const allowedList = getAllowedDomains(db).map((d) => `@${d}`).join(' or ');
+    if (role === 'parent') {
+      return res.status(403).json({
+        error: `Parent sign-in requires either an institutional email (${allowedList}) or your child's enrolled Roll No / College Email.`
+      });
+    }
     return res.status(403).json({
       error: `Access restricted: Only official institutional email IDs (${allowedList}) are allowed to sign in.`
     });
   }
 
   if (!user) {
-    // Automatically enroll verified institutional email into the database
+    // Automatically enroll verified institutional email (or linked parent) into the database
     const assignedRole = isAdminEmail
       ? 'admin'
       : ['student', 'faculty', 'parent', 'admin'].includes(role)
       ? role
       : 'student';
     const studentNum = db.users.filter((u) => u.role === 'student').length + 14;
+    const defaultStudent =
+      matchedStudentForParent ||
+      db.users.find((u) => u.role === 'student') ||
+      null;
 
     user = {
       id: 'usr_' + Date.now(),
@@ -158,8 +203,10 @@ app.post('/api/auth/login', (req, res) => {
       rollNo: assignedRole === 'student' ? `CS25-0${studentNum}` : undefined,
       semester: assignedRole === 'student' ? 'Semester 5' : undefined,
       faceEnrolled: assignedRole === 'student' ? true : undefined,
-      studentRollNo: assignedRole === 'parent' ? 'CS21-014' : undefined,
-      studentName: assignedRole === 'parent' ? 'Aarav Menon' : undefined,
+      studentId: assignedRole === 'parent' && defaultStudent ? defaultStudent.id : undefined,
+      studentRollNo: assignedRole === 'parent' ? (defaultStudent && defaultStudent.rollNo) || 'CS21-014' : undefined,
+      studentEmail: assignedRole === 'parent' && defaultStudent ? defaultStudent.email : undefined,
+      studentName: assignedRole === 'parent' ? (defaultStudent && defaultStudent.name) || 'Aarav Menon' : undefined,
       preferences:
         assignedRole === 'parent'
           ? {
@@ -171,6 +218,20 @@ app.post('/api/auth/login', (req, res) => {
           : undefined,
       createdAt: new Date().toISOString()
     };
+
+    if (assignedRole === 'parent' && defaultStudent) {
+      linkParentAndStudent(user, defaultStudent);
+    } else if (assignedRole === 'student') {
+      // Check if any parent is already waiting for this student email/rollNo
+      const waitingParent = db.users.find(
+        (p) =>
+          p.role === 'parent' &&
+          ((p.studentEmail && p.studentEmail.toLowerCase() === normalizedEmail) ||
+            (p.studentRollNo && p.studentRollNo.toLowerCase() === (user.rollNo || '').toLowerCase()))
+      );
+      if (waitingParent) linkParentAndStudent(waitingParent, user);
+    }
+
     db.users.push(user);
     saveDB(db);
   } else {
@@ -178,10 +239,19 @@ app.post('/api/auth/login', (req, res) => {
     if (!passwordValid) {
       return res.status(401).json({ error: 'Incorrect password. Please try again.' });
     }
+    let updated = false;
     if (isAdminEmail && user.role !== 'admin') {
       user.role = 'admin';
-      saveDB(db);
+      updated = true;
     }
+    if (user.role === 'parent' && studentIdentifier) {
+      const targetStudent = findStudentByQuery(db, studentIdentifier);
+      if (targetStudent) {
+        linkParentAndStudent(user, targetStudent);
+        updated = true;
+      }
+    }
+    if (updated) saveDB(db);
   }
 
   const safeUser = sanitizeUser(user);
@@ -194,7 +264,7 @@ app.post('/api/auth/login', (req, res) => {
 
 // 2. Real Google Sign-In (verifies Google ID token JWT & enforces institutional domain)
 app.post('/api/auth/google', async (req, res) => {
-  const { credential, selectedRole } = req.body;
+  const { credential, selectedRole, studentIdentifier } = req.body;
   if (!credential) {
     return res.status(400).json({ error: 'Missing Google credential token.' });
   }
@@ -221,9 +291,16 @@ app.post('/api/auth/google', async (req, res) => {
     const isAdminEmail = ENV_ADMIN_EMAILS.includes(email);
 
     let user = db.users.find((u) => u.email.toLowerCase() === email);
+    const matchedStudentForParent =
+      selectedRole === 'parent'
+        ? findStudentByQuery(db, studentIdentifier) ||
+          (db.users || []).find(
+            (u) => u.role === 'student' && u.parentEmail && u.parentEmail.toLowerCase() === email
+          )
+        : null;
 
-    // Block personal Gmail/external Google accounts unless pre-enrolled by Admin
-    if (!user && !isAllowedInstitutionalEmail(email, db)) {
+    // Block personal Gmail/external Google accounts unless pre-enrolled by Admin or linked Parent
+    if (!user && !isAllowedInstitutionalEmail(email, db) && !matchedStudentForParent) {
       const allowedList = getAllowedDomains(db).map((d) => `@${d}`).join(' or ');
       return res.status(403).json({
         error: `Access restricted: Your Google account (${email}) is not an institutional email. Please sign in with ${allowedList}.`
@@ -239,6 +316,11 @@ app.post('/api/auth/google', async (req, res) => {
         : 'student';
 
       const studentCount = db.users.filter((u) => u.role === 'student').length + 14;
+      const defaultStudent =
+        matchedStudentForParent ||
+        db.users.find((u) => u.role === 'student') ||
+        null;
+
       user = {
         id: 'usr_' + Date.now(),
         name,
@@ -251,8 +333,10 @@ app.post('/api/auth/google', async (req, res) => {
         rollNo: assignedRole === 'student' ? `CS21-0${studentCount}` : undefined,
         semester: assignedRole === 'student' ? 'Semester 5' : undefined,
         faceEnrolled: assignedRole === 'student' ? true : undefined,
-        studentRollNo: assignedRole === 'parent' ? 'CS21-014' : undefined,
-        studentName: assignedRole === 'parent' ? 'Aarav Menon' : undefined,
+        studentId: assignedRole === 'parent' && defaultStudent ? defaultStudent.id : undefined,
+        studentRollNo: assignedRole === 'parent' ? (defaultStudent && defaultStudent.rollNo) || 'CS21-014' : undefined,
+        studentEmail: assignedRole === 'parent' && defaultStudent ? defaultStudent.email : undefined,
+        studentName: assignedRole === 'parent' ? (defaultStudent && defaultStudent.name) || 'Aarav Menon' : undefined,
         preferences:
           assignedRole === 'parent'
             ? {
@@ -264,11 +348,22 @@ app.post('/api/auth/google', async (req, res) => {
             : undefined,
         createdAt: new Date().toISOString()
       };
+      if (assignedRole === 'parent' && defaultStudent) {
+        linkParentAndStudent(user, defaultStudent);
+      }
       db.users.push(user);
       saveDB(db);
-    } else if (isAdminEmail && user.role !== 'admin') {
-      user.role = 'admin';
-      saveDB(db);
+    } else {
+      let updated = false;
+      if (isAdminEmail && user.role !== 'admin') {
+        user.role = 'admin';
+        updated = true;
+      }
+      if (user.role === 'parent' && matchedStudentForParent) {
+        linkParentAndStudent(user, matchedStudentForParent);
+        updated = true;
+      }
+      if (updated) saveDB(db);
     }
 
     const safeUser = sanitizeUser(user);
@@ -319,6 +414,8 @@ app.post('/api/users', authenticateToken, (req, res) => {
     rollNo,
     semester,
     studentRollNo,
+    studentId,
+    studentEmail,
     parentEmail,
     facePhotoUrl,
     faceDescriptor
@@ -334,9 +431,11 @@ app.post('/api/users', authenticateToken, (req, res) => {
     return res.status(409).json({ error: 'A user with this email already exists.' });
   }
 
-  const linkedStudent = studentRollNo
-    ? db.users.find((u) => u.rollNo && u.rollNo.toLowerCase() === studentRollNo.trim().toLowerCase())
-    : null;
+  const linkedStudent =
+    findStudentByQuery(db, studentId) ||
+    findStudentByQuery(db, studentRollNo) ||
+    findStudentByQuery(db, studentEmail) ||
+    (role === 'parent' ? db.users.find((u) => u.role === 'student') : null);
 
   const newUser = {
     id: 'usr_' + Date.now(),
@@ -351,7 +450,9 @@ app.post('/api/users', authenticateToken, (req, res) => {
     facePhotoUrl: role === 'student' ? facePhotoUrl || '' : undefined,
     faceDescriptor: role === 'student' && Array.isArray(faceDescriptor) ? faceDescriptor : undefined,
     parentEmail: role === 'student' ? (parentEmail || '').trim().toLowerCase() : undefined,
-    studentRollNo: role === 'parent' ? (studentRollNo || 'CS21-014').trim() : undefined,
+    studentId: role === 'parent' && linkedStudent ? linkedStudent.id : undefined,
+    studentRollNo: role === 'parent' ? (linkedStudent ? linkedStudent.rollNo : (studentRollNo || 'CS21-014').trim()) : undefined,
+    studentEmail: role === 'parent' && linkedStudent ? linkedStudent.email : undefined,
     studentName: role === 'parent' ? (linkedStudent ? linkedStudent.name : 'Aarav Menon') : undefined,
     preferences:
       role === 'parent'
@@ -365,9 +466,89 @@ app.post('/api/users', authenticateToken, (req, res) => {
     createdAt: new Date().toISOString()
   };
 
+  if (role === 'parent' && linkedStudent) {
+    linkParentAndStudent(newUser, linkedStudent);
+  } else if (role === 'student' && parentEmail) {
+    const existingParent = db.users.find(
+      (u) => u.role === 'parent' && u.email.toLowerCase() === parentEmail.trim().toLowerCase()
+    );
+    if (existingParent) linkParentAndStudent(existingParent, newUser);
+  }
+
   db.users.push(newUser);
   saveDB(db);
   res.status(201).json({ user: sanitizeUser(newUser) });
+});
+
+// Link a Parent account to a specific Student (by Student ID, Roll No, or Email)
+app.put('/api/parent/link-student', authenticateToken, (req, res) => {
+  const { studentIdentifier, parentId } = req.body;
+  if (!studentIdentifier) {
+    return res.status(400).json({ error: 'Please provide a Student Roll No, Email, or ID to link.' });
+  }
+
+  const db = loadDB();
+  const parentUser =
+    (parentId && db.users.find((u) => u.id === parentId)) ||
+    db.users.find((u) => u.id === req.user.id) ||
+    (req.user && req.user.email && db.users.find((u) => u.email.toLowerCase() === req.user.email.toLowerCase()));
+
+  if (!parentUser) {
+    return res.status(404).json({ error: 'Parent account not found.' });
+  }
+
+  const studentUser = findStudentByQuery(db, studentIdentifier);
+  if (!studentUser) {
+    return res.status(404).json({
+      error: `No enrolled student found matching "${studentIdentifier}". Check the student's Roll No or institutional email.`
+    });
+  }
+
+  linkParentAndStudent(parentUser, studentUser);
+  saveDB(db);
+
+  res.json({
+    ok: true,
+    parent: sanitizeUser(parentUser),
+    student: sanitizeUser(studentUser)
+  });
+});
+
+// Link a Student account to their Parent's email & name
+app.put('/api/student/link-parent', authenticateToken, (req, res) => {
+  const { parentEmail, parentName } = req.body;
+  if (!parentEmail || !String(parentEmail).includes('@')) {
+    return res.status(400).json({ error: 'Please enter a valid parent email address.' });
+  }
+
+  const normalizedParentEmail = String(parentEmail).trim().toLowerCase();
+  const db = loadDB();
+  const studentUser =
+    db.users.find((u) => u.id === req.user.id) ||
+    (req.user && req.user.email && db.users.find((u) => u.email.toLowerCase() === req.user.email.toLowerCase()));
+
+  if (!studentUser) {
+    return res.status(404).json({ error: 'Student account not found.' });
+  }
+
+  studentUser.parentEmail = normalizedParentEmail;
+  if (parentName && String(parentName).trim()) {
+    studentUser.parentName = String(parentName).trim();
+  }
+
+  const existingParent = db.users.find(
+    (u) => u.role === 'parent' && u.email.toLowerCase() === normalizedParentEmail
+  );
+  if (existingParent) {
+    linkParentAndStudent(existingParent, studentUser);
+  }
+
+  saveDB(db);
+  res.json({
+    ok: true,
+    student: sanitizeUser(studentUser),
+    parent: existingParent ? sanitizeUser(existingParent) : null
+  });
 });
 
 // Upload or update a student's reference face photo & biometric descriptor
@@ -533,6 +714,7 @@ app.post('/api/attendance', authenticateToken, (req, res) => {
   const record = {
     id: 'att_' + Date.now(),
     studentId: student.id,
+    studentEmail: student.email,
     studentName: student.name,
     rollNo: student.rollNo || 'CS21-014',
     classId: cls.id,
@@ -553,11 +735,13 @@ app.post('/api/attendance', authenticateToken, (req, res) => {
 
   db.attendance.unshift(record);
 
-  // Trigger parent alert if enabled
+  // Trigger parent alert if enabled (match parent by studentId, studentRollNo, studentEmail, or student.parentEmail)
   const parentUser = db.users.find(
     (u) =>
       u.role === 'parent' &&
-      ((u.studentRollNo && u.studentRollNo === record.rollNo) ||
+      ((u.studentId && u.studentId === student.id) ||
+        (u.studentRollNo && u.studentRollNo.toLowerCase() === (record.rollNo || '').toLowerCase()) ||
+        (u.studentEmail && student.email && u.studentEmail.toLowerCase() === student.email.toLowerCase()) ||
         (student.parentEmail && u.email.toLowerCase() === student.parentEmail.toLowerCase()))
   );
 
@@ -577,6 +761,10 @@ app.post('/api/attendance', authenticateToken, (req, res) => {
   if (shouldAlert) {
     db.alerts.unshift({
       id: 'alt_' + Date.now(),
+      attendanceId: record.id,
+      studentId: student.id,
+      studentEmail: student.email,
+      studentName: student.name,
       studentRollNo: record.rollNo,
       type: badgeType,
       title: alertTitle,
@@ -595,18 +783,34 @@ app.delete('/api/attendance/:id', authenticateToken, (req, res) => {
   const db = loadDB();
   const idx = (db.attendance || []).findIndex((r) => r.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'Attendance record not found' });
+  const removed = db.attendance[idx];
   db.deletedIds = Array.isArray(db.deletedIds) ? db.deletedIds : [];
   if (!db.deletedIds.includes(req.params.id)) db.deletedIds.push(req.params.id);
   db.attendance.splice(idx, 1);
+
+  // Also remove any parent alert generated from this deleted check-in attempt
+  db.alerts = (db.alerts || []).filter(
+    (a) =>
+      a.attendanceId !== req.params.id &&
+      !(removed && a.studentRollNo === removed.rollNo && a.detail && a.detail.includes(removed.time))
+  );
+
   saveDB(db);
   res.json({ ok: true });
 });
 
-// Mark all parent alerts read
+// Mark parent alerts read (scoped to linked student if provided)
 app.post('/api/alerts/mark-read', authenticateToken, (req, res) => {
+  const { studentId, studentRollNo } = req.body || {};
   const db = loadDB();
   db.alerts.forEach((a) => {
-    a.unread = false;
+    if (
+      (!studentId && !studentRollNo) ||
+      (studentId && a.studentId === studentId) ||
+      (studentRollNo && a.studentRollNo === studentRollNo)
+    ) {
+      a.unread = false;
+    }
   });
   saveDB(db);
   res.json({ ok: true });
@@ -655,7 +859,7 @@ app.post('/api/sync', authenticateToken, (req, res) => {
   db.attendance = db.attendance.filter((a) => !deletedSet.has(a.id));
   if (db.attendance.length !== beforeAtt) changed = true;
 
-  // 2. Merge client users & reference face photos
+  // 2. Merge client users, reference face photos, and parent-student relationship links
   if (Array.isArray(users)) {
     users.forEach((cu) => {
       if (!cu || !cu.email || deletedSet.has(cu.id)) return;
@@ -668,11 +872,22 @@ app.post('/api/sync', authenticateToken, (req, res) => {
           passwordHash: cu.passwordHash || bcrypt.hashSync(cu.password || 'password123', 10)
         });
         changed = true;
-      } else if (cu.facePhotoUrl && !existing.facePhotoUrl) {
-        existing.facePhotoUrl = cu.facePhotoUrl;
-        existing.faceDescriptor = cu.faceDescriptor || existing.faceDescriptor;
-        existing.faceEnrolled = true;
-        changed = true;
+      } else {
+        if (cu.facePhotoUrl && !existing.facePhotoUrl) {
+          existing.facePhotoUrl = cu.facePhotoUrl;
+          existing.faceDescriptor = cu.faceDescriptor || existing.faceDescriptor;
+          existing.faceEnrolled = true;
+          changed = true;
+        }
+        // Preserve parent <-> student links from client
+        ['studentId', 'studentRollNo', 'studentEmail', 'studentName', 'parentId', 'parentEmail', 'parentName'].forEach(
+          (relKey) => {
+            if (cu[relKey] && existing[relKey] !== cu[relKey]) {
+              existing[relKey] = cu[relKey];
+              changed = true;
+            }
+          }
+        );
       }
     });
   }

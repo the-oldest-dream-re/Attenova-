@@ -1063,6 +1063,64 @@ function bindPhotoViewButtons(container, records) {
   });
 }
 
+// ---- Parent <-> Student Relational Helpers ----
+function findStudentInList(users, query) {
+  const q = String(query || '').trim().toLowerCase();
+  if (!q) return null;
+  const students = (users || []).filter((u) => u.role === 'student');
+  return (
+    students.find((s) => s.id && s.id.toLowerCase() === q) ||
+    students.find((s) => s.rollNo && s.rollNo.toLowerCase() === q) ||
+    students.find((s) => s.email && s.email.toLowerCase() === q) ||
+    students.find((s) => s.name && s.name.toLowerCase() === q) ||
+    null
+  );
+}
+
+function linkParentAndStudentLocal(parentUser, studentUser) {
+  if (!parentUser || !studentUser) return;
+  parentUser.studentId = studentUser.id;
+  parentUser.studentRollNo = studentUser.rollNo || 'CS21-014';
+  parentUser.studentEmail = studentUser.email;
+  parentUser.studentName = studentUser.name;
+
+  studentUser.parentId = parentUser.id;
+  studentUser.parentEmail = parentUser.email;
+  studentUser.parentName = parentUser.name;
+}
+
+function resolveLinkedStudentForParent(parentUser, users) {
+  const students = (users || []).filter((u) => u.role === 'student');
+  if (!parentUser) return students[0] || null;
+  return (
+    (parentUser.studentId && students.find((s) => s.id === parentUser.studentId)) ||
+    (parentUser.studentEmail &&
+      students.find((s) => s.email && s.email.toLowerCase() === parentUser.studentEmail.toLowerCase())) ||
+    (parentUser.studentRollNo &&
+      students.find((s) => s.rollNo && s.rollNo.toLowerCase() === parentUser.studentRollNo.toLowerCase())) ||
+    (parentUser.email &&
+      students.find((s) => s.parentEmail && s.parentEmail.toLowerCase() === parentUser.email.toLowerCase())) ||
+    students[0] ||
+    null
+  );
+}
+
+function resolveLinkedParentForStudent(studentUser, users) {
+  const parents = (users || []).filter((u) => u.role === 'parent');
+  if (!studentUser) return null;
+  return (
+    (studentUser.parentId && parents.find((p) => p.id === studentUser.parentId)) ||
+    (studentUser.parentEmail &&
+      parents.find((p) => p.email && p.email.toLowerCase() === studentUser.parentEmail.toLowerCase())) ||
+    parents.find((p) => p.studentId && p.studentId === studentUser.id) ||
+    (studentUser.rollNo &&
+      parents.find((p) => p.studentRollNo && p.studentRollNo.toLowerCase() === studentUser.rollNo.toLowerCase())) ||
+    (studentUser.email &&
+      parents.find((p) => p.studentEmail && p.studentEmail.toLowerCase() === studentUser.email.toLowerCase())) ||
+    null
+  );
+}
+
 // ---- Mirror Server Mutations to Persistent Browser Storage (survives Render 15-min spin-down) ----
 function mirrorServerMutationToLocalDB(path, options, data) {
   try {
@@ -1070,35 +1128,43 @@ function mirrorServerMutationToLocalDB(path, options, data) {
     const db = getLocalDB();
     db.deletedIds = Array.isArray(db.deletedIds) ? db.deletedIds : [];
 
-    if ((path === '/api/auth/login' || path === '/api/auth/google') && method === 'POST' && data && data.user) {
+    const upsertUserInDb = (uObj) => {
+      if (!uObj || !uObj.email) return;
       const idx = db.users.findIndex(
-        (u) => u.id === data.user.id || (u.email && data.user.email && u.email.toLowerCase() === data.user.email.toLowerCase())
+        (u) => u.id === uObj.id || (u.email && u.email.toLowerCase() === uObj.email.toLowerCase())
       );
-      if (idx === -1) {
-        db.users.push(data.user);
-      } else {
-        db.users[idx] = { ...db.users[idx], ...data.user };
-      }
+      if (idx === -1) db.users.push(uObj);
+      else db.users[idx] = { ...db.users[idx], ...uObj };
+    };
+
+    if ((path === '/api/auth/login' || path === '/api/auth/google') && method === 'POST' && data && data.user) {
+      upsertUserInDb(data.user);
       saveLocalDB(db);
       return;
     }
 
     if (path === '/api/users' && method === 'POST' && data && data.user) {
-      const idx = db.users.findIndex(
-        (u) => u.id === data.user.id || (u.email && data.user.email && u.email.toLowerCase() === data.user.email.toLowerCase())
-      );
-      if (idx === -1) db.users.push(data.user);
-      else db.users[idx] = { ...db.users[idx], ...data.user };
+      upsertUserInDb(data.user);
+      if (data.user.role === 'parent' && (data.user.studentId || data.user.studentRollNo || data.user.studentEmail)) {
+        const st =
+          findStudentInList(db.users, data.user.studentId) ||
+          findStudentInList(db.users, data.user.studentRollNo) ||
+          findStudentInList(db.users, data.user.studentEmail);
+        if (st) linkParentAndStudentLocal(data.user, st);
+      }
+      saveLocalDB(db);
+      return;
+    }
+
+    if ((path === '/api/parent/link-student' || path === '/api/student/link-parent') && method === 'PUT' && data) {
+      if (data.parent) upsertUserInDb(data.parent);
+      if (data.student) upsertUserInDb(data.student);
       saveLocalDB(db);
       return;
     }
 
     if (path.startsWith('/api/users/') && path.endsWith('/face') && method === 'PUT' && data && data.user) {
-      const idx = db.users.findIndex(
-        (u) => u.id === data.user.id || (u.email && data.user.email && u.email.toLowerCase() === data.user.email.toLowerCase())
-      );
-      if (idx === -1) db.users.push(data.user);
-      else db.users[idx] = { ...db.users[idx], ...data.user };
+      upsertUserInDb(data.user);
       saveLocalDB(db);
       return;
     }
@@ -1146,6 +1212,7 @@ function mirrorServerMutationToLocalDB(path, options, data) {
     if (path.startsWith('/api/attendance/') && method === 'DELETE') {
       const id = path.split('/').pop();
       db.attendance = (db.attendance || []).filter((r) => r.id !== id);
+      db.alerts = (db.alerts || []).filter((a) => a.attendanceId !== id);
       if (id && !db.deletedIds.includes(id)) db.deletedIds.push(id);
       saveLocalDB(db);
     }
@@ -1285,9 +1352,19 @@ function handleOfflineFallback(path, options) {
     const isAdmin =
       ['admin@college.edu', 'principal@college.edu'].includes(email) || email.startsWith('admin@');
     let user = db.users.find((u) => u.email.toLowerCase() === email);
+    const matchedStudent =
+      body.role === 'parent'
+        ? findStudentInList(db.users, body.studentIdentifier) ||
+          db.users.find((u) => u.role === 'student' && u.parentEmail && u.parentEmail.toLowerCase() === email)
+        : null;
 
-    if (!user && !isAllowedCollegeEmailLocal(email)) {
+    if (!user && !isAllowedCollegeEmailLocal(email) && !matchedStudent) {
       const allowedList = getLocalAllowedDomains().map((d) => `@${d}`).join(' or ');
+      if (body.role === 'parent') {
+        throw new Error(
+          `Parent sign-in requires either an institutional email (${allowedList}) or your child's enrolled Roll No / College Email.`
+        );
+      }
       throw new Error(
         `Access restricted: Only official institutional email IDs (${allowedList}) are allowed to sign in.`
       );
@@ -1301,6 +1378,7 @@ function handleOfflineFallback(path, options) {
         .map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
         .join(' ');
       const assignedRole = isAdmin ? 'admin' : body.role || 'student';
+      const defaultStudent = matchedStudent || db.users.find((u) => u.role === 'student');
       user = {
         id: 'usr_' + Date.now(),
         name: localPart || email.split('@')[0],
@@ -1311,13 +1389,24 @@ function handleOfflineFallback(path, options) {
         rollNo: assignedRole === 'student' ? `CS25-0${db.users.length + 14}` : undefined,
         semester: assignedRole === 'student' ? 'Semester 5' : undefined,
         faceEnrolled: assignedRole === 'student' ? true : undefined,
-        studentRollNo: assignedRole === 'parent' ? 'CS21-014' : undefined,
-        studentName: assignedRole === 'parent' ? 'Aarav Menon' : undefined
+        studentId: assignedRole === 'parent' && defaultStudent ? defaultStudent.id : undefined,
+        studentRollNo: assignedRole === 'parent' ? (defaultStudent && defaultStudent.rollNo) || 'CS21-014' : undefined,
+        studentEmail: assignedRole === 'parent' && defaultStudent ? defaultStudent.email : undefined,
+        studentName: assignedRole === 'parent' ? (defaultStudent && defaultStudent.name) || 'Aarav Menon' : undefined
       };
+      if (assignedRole === 'parent' && defaultStudent) {
+        linkParentAndStudentLocal(user, defaultStudent);
+      }
       db.users.push(user);
       saveLocalDB(db);
-    } else if (user.password && user.password !== 'password123' && user.password !== body.password) {
-      throw new Error('Incorrect password. Please try again.');
+    } else {
+      if (user.password && user.password !== 'password123' && user.password !== body.password) {
+        throw new Error('Incorrect password. Please try again.');
+      }
+      if (user.role === 'parent' && matchedStudent) {
+        linkParentAndStudentLocal(user, matchedStudent);
+        saveLocalDB(db);
+      }
     }
     return { token: 'local_jwt_' + Date.now(), user };
   }
@@ -1333,8 +1422,13 @@ function handleOfflineFallback(path, options) {
     const isAdmin = ['admin@college.edu', 'principal@college.edu'].includes(email);
 
     let user = db.users.find((u) => u.email.toLowerCase() === email);
+    const matchedStudent =
+      body.selectedRole === 'parent'
+        ? findStudentInList(db.users, body.studentIdentifier) ||
+          db.users.find((u) => u.role === 'student' && u.parentEmail && u.parentEmail.toLowerCase() === email)
+        : null;
 
-    if (!user && !isAllowedCollegeEmailLocal(email)) {
+    if (!user && !isAllowedCollegeEmailLocal(email) && !matchedStudent) {
       const allowedList = getLocalAllowedDomains().map((d) => `@${d}`).join(' or ');
       throw new Error(
         `Access restricted: Your Google account (${email}) is not an institutional email. Please sign in with ${allowedList}.`
@@ -1343,6 +1437,7 @@ function handleOfflineFallback(path, options) {
 
     if (!user) {
       const assignedRole = isAdmin ? 'admin' : body.selectedRole || 'student';
+      const defaultStudent = matchedStudent || db.users.find((u) => u.role === 'student');
       user = {
         id: 'usr_' + Date.now(),
         name,
@@ -1353,9 +1448,18 @@ function handleOfflineFallback(path, options) {
         rollNo: assignedRole === 'student' ? `CS21-0${db.users.length + 14}` : undefined,
         semester: assignedRole === 'student' ? 'Semester 5' : undefined,
         faceEnrolled: assignedRole === 'student' ? true : undefined,
-        studentRollNo: assignedRole === 'parent' ? 'CS21-014' : undefined
+        studentId: assignedRole === 'parent' && defaultStudent ? defaultStudent.id : undefined,
+        studentRollNo: assignedRole === 'parent' ? (defaultStudent && defaultStudent.rollNo) || 'CS21-014' : undefined,
+        studentEmail: assignedRole === 'parent' && defaultStudent ? defaultStudent.email : undefined,
+        studentName: assignedRole === 'parent' ? (defaultStudent && defaultStudent.name) || 'Aarav Menon' : undefined
       };
+      if (assignedRole === 'parent' && defaultStudent) {
+        linkParentAndStudentLocal(user, defaultStudent);
+      }
       db.users.push(user);
+      saveLocalDB(db);
+    } else if (user.role === 'parent' && matchedStudent) {
+      linkParentAndStudentLocal(user, matchedStudent);
       saveLocalDB(db);
     }
     return { token: 'local_google_jwt_' + Date.now(), user };
@@ -1375,6 +1479,12 @@ function handleOfflineFallback(path, options) {
   }
 
   if (path === '/api/users' && method === 'POST') {
+    const linkedStudent =
+      findStudentInList(db.users, body.studentId) ||
+      findStudentInList(db.users, body.studentRollNo) ||
+      findStudentInList(db.users, body.studentEmail) ||
+      (body.role === 'parent' ? db.users.find((u) => u.role === 'student') : null);
+
     const newUser = {
       id: 'usr_' + Date.now(),
       name: body.name,
@@ -1390,11 +1500,59 @@ function handleOfflineFallback(path, options) {
         body.role === 'student' && Array.isArray(body.faceDescriptor)
           ? body.faceDescriptor
           : undefined,
-      studentRollNo: body.role === 'parent' ? body.studentRollNo || 'CS21-014' : undefined
+      studentId: body.role === 'parent' && linkedStudent ? linkedStudent.id : undefined,
+      studentRollNo: body.role === 'parent' ? (linkedStudent && linkedStudent.rollNo) || body.studentRollNo || 'CS21-014' : undefined,
+      studentEmail: body.role === 'parent' && linkedStudent ? linkedStudent.email : undefined,
+      studentName: body.role === 'parent' && linkedStudent ? linkedStudent.name : undefined
     };
+    if (body.role === 'parent' && linkedStudent) {
+      linkParentAndStudentLocal(newUser, linkedStudent);
+    }
     db.users.push(newUser);
     saveLocalDB(db);
     return { user: newUser };
+  }
+
+  if (path === '/api/parent/link-student' && method === 'PUT') {
+    const sess = getSessionUser();
+    const parentUser =
+      (body.parentId && db.users.find((u) => u.id === body.parentId)) ||
+      (sess && db.users.find((u) => u.id === sess.id || u.email === sess.email)) ||
+      db.users.find((u) => u.role === 'parent');
+    const studentUser = findStudentInList(db.users, body.studentIdentifier);
+    if (!studentUser) {
+      throw new Error(`No enrolled student found matching "${body.studentIdentifier}".`);
+    }
+    if (parentUser) {
+      linkParentAndStudentLocal(parentUser, studentUser);
+      saveLocalDB(db);
+      if (sess && (sess.id === parentUser.id || sess.email === parentUser.email)) {
+        setSession(getToken(), parentUser);
+      }
+    }
+    return { ok: true, parent: parentUser, student: studentUser };
+  }
+
+  if (path === '/api/student/link-parent' && method === 'PUT') {
+    const sess = getSessionUser();
+    const studentUser =
+      (sess && db.users.find((u) => u.id === sess.id || u.email === sess.email)) ||
+      db.users.find((u) => u.role === 'student');
+    if (!studentUser) throw new Error('Student account not found.');
+    const normalizedParentEmail = String(body.parentEmail || '').trim().toLowerCase();
+    studentUser.parentEmail = normalizedParentEmail;
+    if (body.parentName) studentUser.parentName = String(body.parentName).trim();
+    const existingParent = db.users.find(
+      (u) => u.role === 'parent' && u.email && u.email.toLowerCase() === normalizedParentEmail
+    );
+    if (existingParent) {
+      linkParentAndStudentLocal(existingParent, studentUser);
+    }
+    saveLocalDB(db);
+    if (sess && (sess.id === studentUser.id || sess.email === studentUser.email)) {
+      setSession(getToken(), studentUser);
+    }
+    return { ok: true, student: studentUser, parent: existingParent || null };
   }
 
   if (path.startsWith('/api/users/') && path.endsWith('/face') && method === 'PUT') {
@@ -1505,6 +1663,7 @@ function handleOfflineFallback(path, options) {
     const record = {
       id: 'att_' + Date.now(),
       studentId: student.id,
+      studentEmail: student.email,
       studentName: student.name,
       rollNo: student.rollNo || 'CS21-014',
       classId: cls.id,
@@ -1523,6 +1682,10 @@ function handleOfflineFallback(path, options) {
     db.attendance.unshift(record);
     db.alerts.unshift({
       id: 'alt_' + Date.now(),
+      attendanceId: record.id,
+      studentId: student.id,
+      studentEmail: student.email,
+      studentName: student.name,
       studentRollNo: record.rollNo,
       type: badgeType,
       title: badgeType === 'ok' ? `Checked in to ${cls.name}` : `${status} in ${cls.name}`,
@@ -1536,6 +1699,7 @@ function handleOfflineFallback(path, options) {
   if (path.startsWith('/api/attendance/') && method === 'DELETE') {
     const id = path.split('/').pop();
     db.attendance = (db.attendance || []).filter((r) => r.id !== id);
+    db.alerts = (db.alerts || []).filter((a) => a.attendanceId !== id);
     db.deletedIds = Array.isArray(db.deletedIds) ? db.deletedIds : [];
     if (id && !db.deletedIds.includes(id)) db.deletedIds.push(id);
     saveLocalDB(db);
@@ -1543,7 +1707,15 @@ function handleOfflineFallback(path, options) {
   }
 
   if (path === '/api/alerts/mark-read' && method === 'POST') {
-    db.alerts.forEach((a) => (a.unread = false));
+    db.alerts.forEach((a) => {
+      if (
+        (!body.studentId && !body.studentRollNo) ||
+        (body.studentId && a.studentId === body.studentId) ||
+        (body.studentRollNo && a.studentRollNo === body.studentRollNo)
+      ) {
+        a.unread = false;
+      }
+    });
     saveLocalDB(db);
     return { ok: true };
   }
@@ -1673,6 +1845,28 @@ if (currentPage === 'login') {
 async function initLoginPage() {
   const loginForm = document.querySelector('#login-form');
   const alertBox = document.querySelector('#login-alert');
+  const parentLinkField = document.querySelector('#parent-student-link-field');
+  const parentStudentInput = document.querySelector('#parent-student-identifier');
+  const emailLabelEl = document.querySelector('#login-email-label');
+
+  function updateRoleDependentFields() {
+    const selectedRole = (document.querySelector('input[name="role"]:checked') || {}).value || 'student';
+    if (parentLinkField) {
+      parentLinkField.hidden = selectedRole !== 'parent';
+    }
+    if (emailLabelEl) {
+      if (selectedRole === 'parent') {
+        emailLabelEl.innerHTML = `Parent Email <span class="muted small">(or @mgmmumbai.ac.in / @college.edu)</span>`;
+      } else {
+        emailLabelEl.innerHTML = `Institutional Email <span class="muted small">(@mgmmumbai.ac.in / @college.edu)</span>`;
+      }
+    }
+  }
+
+  document.querySelectorAll('input[name="role"]').forEach((radio) => {
+    radio.addEventListener('change', updateRoleDependentFields);
+  });
+  updateRoleDependentFields();
 
   function showLoginMessage(msg, type = 'error') {
     if (!alertBox) return;
@@ -1687,6 +1881,10 @@ async function initLoginPage() {
       document.querySelector('#password').value = 'password123';
       const roleRadio = document.querySelector(`input[name="role"][value="${chip.dataset.fillRole}"]`);
       if (roleRadio) roleRadio.checked = true;
+      updateRoleDependentFields();
+      if (chip.dataset.fillRole === 'parent' && parentStudentInput && !parentStudentInput.value) {
+        parentStudentInput.value = 'CS21-014';
+      }
       if (alertBox) alertBox.hidden = true;
     });
   });
@@ -1698,11 +1896,12 @@ async function initLoginPage() {
       const email = loginForm.email.value.trim();
       const password = loginForm.password.value;
       const selectedRole = loginForm.role.value;
+      const studentIdentifier = parentStudentInput ? parentStudentInput.value.trim() : '';
 
       try {
         const res = await apiRequest('/api/auth/login', {
           method: 'POST',
-          body: JSON.stringify({ email, password, role: selectedRole })
+          body: JSON.stringify({ email, password, role: selectedRole, studentIdentifier })
         });
         setSession(res.token, res.user);
         window.location.href = getDashboardForRole(res.user.role);
@@ -1737,11 +1936,13 @@ async function initLoginPage() {
             try {
               const selectedRole =
                 (document.querySelector('input[name="role"]:checked') || {}).value || 'student';
+              const studentIdentifier = parentStudentInput ? parentStudentInput.value.trim() : '';
               const res = await apiRequest('/api/auth/google', {
                 method: 'POST',
                 body: JSON.stringify({
                   credential: response.credential,
-                  selectedRole
+                  selectedRole,
+                  studentIdentifier
                 })
               });
               setSession(res.token, res.user);
@@ -1813,8 +2014,79 @@ async function initStudentDashboard() {
     const firstName = user.name.split(' ')[0];
     document.querySelector('#student-greeting').textContent = `Hello, ${firstName}`;
     document.querySelector('#student-meta').textContent = `Roll no ${user.rollNo || 'CS21-014'} · ${
-      user.department || 'Computer Science'
-    }, ${user.semester || 'Semester 5'}`;
+      user.email || ''
+    } · ${user.department || 'Computer Science'}, ${user.semester || 'Semester 5'}`;
+  }
+
+  // ---- Student -> Parent Link Card Logic ----
+  const parentBadgeEl = document.querySelector('#student-linked-parent-badge');
+  const parentNameInput = document.querySelector('#student-parent-name');
+  const parentEmailInput = document.querySelector('#student-parent-email');
+  const linkParentBtn = document.querySelector('#student-link-parent-btn');
+  const linkParentStatus = document.querySelector('#student-link-parent-status');
+  const parentHelperEl = document.querySelector('#student-parent-helper');
+
+  function renderStudentParentCard() {
+    if (!user) return;
+    const linkedParent = resolveLinkedParentForStudent(user, data.users || []);
+    const pEmail = user.parentEmail || (linkedParent && linkedParent.email) || '';
+    const pName = user.parentName || (linkedParent && linkedParent.name) || '';
+
+    if (parentNameInput && pName && !parentNameInput.value) parentNameInput.value = pName;
+    if (parentEmailInput && pEmail && !parentEmailInput.value) parentEmailInput.value = pEmail;
+    if (parentHelperEl) {
+      parentHelperEl.innerHTML = `Share your Roll No (<strong>${user.rollNo || 'CS21-014'}</strong>) or Email (<strong>${
+        user.email || ''
+      }</strong>) with your parent, or link their email below.`;
+    }
+    if (parentBadgeEl) {
+      if (pEmail) {
+        parentBadgeEl.className = 'badge ok';
+        parentBadgeEl.textContent = `✓ Linked: ${pName ? pName + ' · ' : ''}${pEmail}`;
+      } else {
+        parentBadgeEl.className = 'badge warn';
+        parentBadgeEl.textContent = 'No Parent Linked';
+      }
+    }
+  }
+
+  renderStudentParentCard();
+
+  if (linkParentBtn) {
+    linkParentBtn.addEventListener('click', async () => {
+      const parentEmail = (parentEmailInput ? parentEmailInput.value : '').trim();
+      const parentName = (parentNameInput ? parentNameInput.value : '').trim();
+      if (!parentEmail || !parentEmail.includes('@')) {
+        if (linkParentStatus) linkParentStatus.textContent = '⚠️ Please enter a valid parent email address.';
+        return;
+      }
+      try {
+        linkParentBtn.disabled = true;
+        const res = await apiRequest('/api/student/link-parent', {
+          method: 'PUT',
+          body: JSON.stringify({ parentEmail, parentName })
+        });
+        if (user) {
+          user.parentEmail = parentEmail.toLowerCase();
+          if (parentName) user.parentName = parentName;
+          setSession(getToken(), user);
+        }
+        if (res.parent) {
+          const pIdx = (data.users || []).findIndex((u) => u.id === res.parent.id);
+          if (pIdx !== -1) data.users[pIdx] = res.parent;
+        }
+        renderStudentParentCard();
+        if (linkParentStatus) {
+          linkParentStatus.textContent = `✓ Linked parent (${parentEmail}) to your student profile (${
+            user ? user.rollNo : ''
+          }).`;
+        }
+      } catch (err) {
+        if (linkParentStatus) linkParentStatus.textContent = 'Error: ' + (err.message || 'Could not link parent');
+      } finally {
+        linkParentBtn.disabled = false;
+      }
+    });
   }
 
   const classSelect = document.querySelector('#student-class-select');
@@ -3120,82 +3392,312 @@ if (currentPage === 'parent') {
 
 async function initParentDashboard() {
   const data = await apiRequest('/api/data');
-  const user = data.currentUser || sessionUser;
-  const studentRoll = (user && user.studentRollNo) || 'CS21-014';
-  const student =
-    (data.users || []).find((u) => u.rollNo === studentRoll) ||
-    (data.users || []).find((u) => u.role === 'student');
+  let user = data.currentUser || sessionUser;
+  const classes = data.classes || [];
+  let students = (data.users || []).filter((u) => u.role === 'student');
 
-  if (student) {
-    const firstName = student.name.split(' ')[0];
-    document.querySelector('#parent-heading').textContent = `${firstName}'s attendance`;
-    document.querySelector('#parent-subheading').textContent = `${
-      student.department || 'Computer Science'
-    }, ${student.semester || 'Semester 5'} · roll no ${student.rollNo}`;
+  let activeStudent = resolveLinkedStudentForParent(user, data.users || []);
+
+  const selectEl = document.querySelector('#parent-student-select');
+  const inputEl = document.querySelector('#parent-student-input');
+  const linkBtn = document.querySelector('#parent-link-student-btn');
+  const linkStatusEl = document.querySelector('#parent-link-status');
+  const filterClassEl = document.querySelector('#parent-filter-class');
+  const filterDateEl = document.querySelector('#parent-filter-date');
+  const filterResetBtn = document.querySelector('#parent-filter-reset');
+
+  if (filterClassEl) {
+    filterClassEl.innerHTML =
+      `<option value="all">All Classes</option>` +
+      classes.map((c) => `<option value="${c.name}">${c.name} (${c.room})</option>`).join('');
   }
 
-  const alerts = (data.alerts || []).filter(
-    (a) => !a.studentRollNo || a.studentRollNo === studentRoll
-  );
-  const history = (data.attendance || []).filter(
-    (r) => !r.rollNo || r.rollNo === studentRoll
-  );
+  function isRecordForStudent(r, st) {
+    if (!r || !st) return false;
+    if (r.studentId && st.id && r.studentId === st.id) return true;
+    if (r.rollNo && st.rollNo && r.rollNo.toLowerCase() === st.rollNo.toLowerCase()) return true;
+    if (r.studentEmail && st.email && r.studentEmail.toLowerCase() === st.email.toLowerCase()) return true;
+    if (r.studentName && st.name && r.studentName.toLowerCase() === st.name.toLowerCase()) return true;
+    return false;
+  }
 
-  const attended = history.filter((r) => r.badgeType === 'ok' || r.badgeType === 'warn').length + 20;
-  const total = attended + history.filter((r) => r.badgeType === 'bad').length + 1;
-  document.querySelector('#parent-stat-pct').textContent = `${Math.round((attended / total) * 100)}%`;
-  document.querySelector('#parent-stat-ratio').textContent = `${attended} / ${total}`;
+  function isAlertForStudent(a, st) {
+    if (!a || !st) return false;
+    if (a.studentId && st.id && a.studentId === st.id) return true;
+    if (a.studentRollNo && st.rollNo && a.studentRollNo.toLowerCase() === st.rollNo.toLowerCase()) return true;
+    if (a.studentEmail && st.email && a.studentEmail.toLowerCase() === st.email.toLowerCase()) return true;
+    return false;
+  }
 
-  function renderAlerts() {
-    const unread = alerts.filter((a) => a.unread).length;
-    document.querySelector('#unread-count').textContent = String(unread);
-    const list = document.querySelector('#parent-alerts-list');
-    if (list) {
-      list.innerHTML = alerts
-        .map(
-          (a) => `
-        <div class="alert ${a.type || 'ok'}">
-          ${a.unread ? '<span class="dot"></span>' : ''}
-          <div>
-            <strong>${a.title}</strong>
-            <div class="muted small">${a.detail}</div>
+  function renderParentDashboard() {
+    students = (data.users || []).filter((u) => u.role === 'student');
+    if (!activeStudent && students.length > 0) {
+      activeStudent = resolveLinkedStudentForParent(user, data.users || []);
+    }
+
+    // Populate child selector dropdown
+    if (selectEl) {
+      selectEl.innerHTML =
+        students.length > 0
+          ? students
+              .map(
+                (s) =>
+                  `<option value="${s.id}" ${
+                    activeStudent && s.id === activeStudent.id ? 'selected' : ''
+                  }>${s.name} (${s.rollNo || 'Student'} · ${s.email})</option>`
+              )
+              .join('')
+          : `<option value="">No students enrolled yet</option>`;
+    }
+
+    if (!activeStudent) return;
+
+    const firstName = activeStudent.name.split(' ')[0];
+    const headingEl = document.querySelector('#parent-heading');
+    const subheadingEl = document.querySelector('#parent-subheading');
+    if (headingEl) headingEl.textContent = `${firstName}'s attendance`;
+    if (subheadingEl) {
+      subheadingEl.textContent = `${activeStudent.department || 'Computer Science'}, ${
+        activeStudent.semester || 'Semester 5'
+      } · Roll no ${activeStudent.rollNo || 'CS21-014'} · ${activeStudent.email || ''}`;
+    }
+
+    // Linked child profile card
+    const childNameEl = document.querySelector('#parent-child-name');
+    const childRollBadge = document.querySelector('#parent-child-roll-badge');
+    const childFaceBadge = document.querySelector('#parent-child-face-badge');
+    const childMetaEl = document.querySelector('#parent-child-meta');
+    const childPhotoEl = document.querySelector('#parent-child-photo');
+    const childPlaceholderEl = document.querySelector('#parent-child-placeholder');
+
+    if (childNameEl) childNameEl.textContent = activeStudent.name;
+    if (childRollBadge) childRollBadge.textContent = `Roll: ${activeStudent.rollNo || 'CS21-014'}`;
+    if (childFaceBadge) {
+      if (activeStudent.facePhotoUrl) {
+        childFaceBadge.className = 'badge ok';
+        childFaceBadge.textContent = '✓ Face ID Enrolled';
+      } else {
+        childFaceBadge.className = 'badge warn';
+        childFaceBadge.textContent = 'No Reference Photo';
+      }
+    }
+    if (childMetaEl) {
+      childMetaEl.textContent = `${activeStudent.email || ''} · ${
+        activeStudent.department || 'Computer Science'
+      } · ${activeStudent.semester || 'Semester 5'}`;
+    }
+    if (childPhotoEl && childPlaceholderEl) {
+      if (activeStudent.facePhotoUrl) {
+        childPhotoEl.src = activeStudent.facePhotoUrl;
+        childPhotoEl.hidden = false;
+        childPlaceholderEl.hidden = true;
+      } else {
+        childPhotoEl.hidden = true;
+        childPlaceholderEl.hidden = false;
+      }
+    }
+
+    // Filter attendance & alerts for the linked student
+    const studentHistory = (data.attendance || []).filter((r) => isRecordForStudent(r, activeStudent));
+    const studentAlerts = (data.alerts || []).filter((a) => isAlertForStudent(a, activeStudent));
+
+    // Real Attendance Stats (no fake offsets)
+    const attended = studentHistory.filter((r) => r.badgeType === 'ok' || r.badgeType === 'warn').length;
+    const missed = studentHistory.filter((r) => r.badgeType === 'bad').length;
+    const total = attended + missed;
+    const pct = total > 0 ? Math.round((attended / total) * 100) : 0;
+
+    const pctEl = document.querySelector('#parent-stat-pct');
+    const ratioEl = document.querySelector('#parent-stat-ratio');
+    const missedEl = document.querySelector('#parent-stat-missed');
+    const eligEl = document.querySelector('#parent-stat-eligibility');
+
+    if (pctEl) pctEl.textContent = `${pct}%`;
+    if (ratioEl) ratioEl.textContent = `${attended} / ${total}`;
+    if (missedEl) missedEl.textContent = String(missed);
+    if (eligEl) {
+      if (total === 0) {
+        eligEl.innerHTML = `<span class="badge info">No sessions logged yet</span>`;
+      } else if (pct >= 75) {
+        eligEl.innerHTML = `<span class="badge ok">✓ On Track (≥ 75%)</span>`;
+      } else {
+        eligEl.innerHTML = `<span class="badge bad">⚠️ Attendance Shortage (${pct}%)</span>`;
+      }
+    }
+
+    // Render Alerts for Linked Student
+    const unread = studentAlerts.filter((a) => a.unread).length;
+    const unreadEl = document.querySelector('#unread-count');
+    if (unreadEl) unreadEl.textContent = String(unread);
+
+    const alertsListEl = document.querySelector('#parent-alerts-list');
+    if (alertsListEl) {
+      if (studentAlerts.length === 0) {
+        alertsListEl.innerHTML = `<div class="muted small">No check-in alerts recorded for ${activeStudent.name} yet.</div>`;
+      } else {
+        alertsListEl.innerHTML = studentAlerts
+          .map(
+            (a) => `
+          <div class="alert ${a.type || 'ok'}">
+            ${a.unread ? '<span class="dot"></span>' : ''}
+            <div>
+              <strong>${a.title}</strong>
+              <div class="muted small">${a.detail}</div>
+            </div>
           </div>
-        </div>
-      `
-        )
+        `
+          )
+          .join('');
+      }
+    }
+
+    // Render Subject-Wise Breakdown for Linked Student
+    const classwiseTbody = document.querySelector('#parent-classwise-tbody');
+    if (classwiseTbody) {
+      const classNamesSet = new Set(classes.map((c) => c.name));
+      studentHistory.forEach((r) => {
+        if (r.className) classNamesSet.add(r.className);
+      });
+      const allClassNames = Array.from(classNamesSet);
+
+      classwiseTbody.innerHTML = allClassNames
+        .map((cName) => {
+          const clsObj = classes.find((c) => c.name === cName) || {};
+          const cLogs = studentHistory.filter((r) => r.className === cName);
+          const cAtt = cLogs.filter((r) => r.badgeType === 'ok' || r.badgeType === 'warn').length;
+          const cMiss = cLogs.filter((r) => r.badgeType === 'bad').length;
+          const cTot = cAtt + cMiss;
+          const cPct = cTot > 0 ? Math.round((cAtt / cTot) * 100) : 0;
+          const badgeCls = !cTot ? 'info' : cPct >= 75 ? 'ok' : cPct >= 60 ? 'warn' : 'bad';
+          const statusTxt =
+            cTot === 0 ? 'No sessions yet' : cPct >= 75 ? 'On Track (≥75%)' : 'Shortage (<75%)';
+          return `
+            <tr>
+              <td><strong>${cName}</strong></td>
+              <td>${clsObj.room || 'Classroom'} · ${clsObj.schedule || 'Scheduled'}</td>
+              <td><span class="badge ok">${cAtt}</span></td>
+              <td><span class="badge ${cMiss > 0 ? 'bad' : ''}">${cMiss}</span></td>
+              <td><strong>${cTot}</strong></td>
+              <td><span class="badge ${badgeCls}">${cTot > 0 ? `${cPct}%` : '—'}</span></td>
+              <td><span class="badge ${badgeCls}">${statusTxt}</span></td>
+            </tr>
+          `;
+        })
         .join('');
+    }
+
+    // Render Filterable Attendance History Table
+    const historyTbody = document.querySelector('#parent-history-tbody');
+    const historyCountEl = document.querySelector('#parent-history-count');
+    const selectedClass = (filterClassEl && filterClassEl.value) || 'all';
+    const selectedDate = (filterDateEl && filterDateEl.value) || '';
+
+    const filteredHistory = studentHistory.filter((r) => {
+      if (selectedClass !== 'all' && r.className !== selectedClass) return false;
+      if (selectedDate && r.date !== selectedDate) return false;
+      return true;
+    });
+
+    if (historyCountEl) {
+      historyCountEl.textContent = `Showing ${filteredHistory.length} of ${studentHistory.length} session(s) for ${activeStudent.name} (${activeStudent.rollNo})`;
+    }
+
+    if (historyTbody) {
+      if (filteredHistory.length === 0) {
+        historyTbody.innerHTML = `<tr><td colspan="6" class="muted small">No attendance records match the selected filter for ${activeStudent.name}.</td></tr>`;
+      } else {
+        historyTbody.innerHTML = filteredHistory
+          .map(
+            (r) => `
+          <tr>
+            <td>${r.displayDate || r.date}</td>
+            <td>${r.className}</td>
+            <td>${renderGpsLocationCell(r)}</td>
+            <td><span class="badge ${r.badgeType || 'ok'}">${r.status}</span></td>
+            <td>${r.time}</td>
+            <td><button class="btn secondary sm" data-view-photo="${r.id}" type="button">View GPS Photo</button></td>
+          </tr>
+        `
+          )
+          .join('');
+        bindPhotoViewButtons(historyTbody, filteredHistory);
+      }
     }
   }
 
-  renderAlerts();
+  async function linkParentToStudentIdentifier(identifier) {
+    if (!identifier) return;
+    if (linkStatusEl) linkStatusEl.textContent = 'Linking student account…';
+    try {
+      const res = await apiRequest('/api/parent/link-student', {
+        method: 'PUT',
+        body: JSON.stringify({ studentIdentifier: identifier })
+      });
+      if (res.student) {
+        activeStudent = res.student;
+        const sIdx = (data.users || []).findIndex((u) => u.id === res.student.id);
+        if (sIdx !== -1) data.users[sIdx] = res.student;
+      }
+      if (res.parent) {
+        user = res.parent;
+        setSession(getToken(), res.parent);
+      }
+      if (inputEl) inputEl.value = '';
+      if (linkStatusEl && activeStudent) {
+        linkStatusEl.textContent = `✓ Linked to ${activeStudent.name} (${activeStudent.rollNo} · ${activeStudent.email}).`;
+      }
+      renderParentDashboard();
+    } catch (err) {
+      if (linkStatusEl) linkStatusEl.textContent = '⚠️ ' + (err.message || 'Could not link student.');
+    }
+  }
+
+  if (selectEl) {
+    selectEl.addEventListener('change', () => {
+      if (selectEl.value) {
+        linkParentToStudentIdentifier(selectEl.value);
+      }
+    });
+  }
+
+  if (linkBtn) {
+    linkBtn.addEventListener('click', () => {
+      const typed = (inputEl ? inputEl.value : '').trim();
+      const chosen = typed || (selectEl ? selectEl.value : '');
+      linkParentToStudentIdentifier(chosen);
+    });
+  }
+
+  if (filterClassEl) filterClassEl.addEventListener('change', renderParentDashboard);
+  if (filterDateEl) filterDateEl.addEventListener('change', renderParentDashboard);
+  if (filterResetBtn) {
+    filterResetBtn.addEventListener('click', () => {
+      if (filterClassEl) filterClassEl.value = 'all';
+      if (filterDateEl) filterDateEl.value = '';
+      renderParentDashboard();
+    });
+  }
 
   const readBtn = document.querySelector('#mark-read');
   if (readBtn) {
     readBtn.addEventListener('click', async () => {
-      await apiRequest('/api/alerts/mark-read', { method: 'POST' });
-      alerts.forEach((a) => (a.unread = false));
-      renderAlerts();
+      await apiRequest('/api/alerts/mark-read', {
+        method: 'POST',
+        body: JSON.stringify({
+          studentId: activeStudent ? activeStudent.id : undefined,
+          studentRollNo: activeStudent ? activeStudent.rollNo : undefined
+        })
+      });
+      (data.alerts || []).forEach((a) => {
+        if (!activeStudent || isAlertForStudent(a, activeStudent)) {
+          a.unread = false;
+        }
+      });
+      renderParentDashboard();
     });
   }
 
-  const historyTbody = document.querySelector('#parent-history-tbody');
-  if (historyTbody) {
-    historyTbody.innerHTML = history
-      .map(
-        (r) => `
-      <tr>
-        <td>${r.displayDate || r.date}</td>
-        <td>${r.className}</td>
-        <td>${renderGpsLocationCell(r)}</td>
-        <td><span class="badge ${r.badgeType || 'ok'}">${r.status}</span></td>
-        <td>${r.time}</td>
-        <td><button class="btn secondary sm" data-view-photo="${r.id}" type="button">View GPS Photo</button></td>
-      </tr>
-    `
-      )
-      .join('');
-    bindPhotoViewButtons(historyTbody, history);
-  }
+  renderParentDashboard();
 }
 
 // ---- Parent Preferences Logic -----------------------------------------
@@ -3260,26 +3762,89 @@ async function initAdminPortal() {
 
   const adminRowFaceInput = document.querySelector('#admin-row-face-input');
   const adminFaceStatus = document.querySelector('#admin-face-upload-status');
+  const roleSelectEl = document.querySelector('#u-role');
+  const rollFieldEl = document.querySelector('#u-roll-field');
+  const parentLinkFieldEl = document.querySelector('#u-parent-link-field');
+  const linkedStudentSelectEl = document.querySelector('#u-linked-student-select');
+  const faceFieldEl = document.querySelector('#u-face-field');
   let adminTargetUserId = null;
+
+  function syncAdminAddUserRoleFields() {
+    const r = (roleSelectEl && roleSelectEl.value) || 'student';
+    if (rollFieldEl) rollFieldEl.hidden = r !== 'student' && r !== 'parent';
+    if (parentLinkFieldEl) parentLinkFieldEl.hidden = r !== 'parent';
+    if (faceFieldEl) faceFieldEl.hidden = r !== 'student';
+  }
+
+  if (roleSelectEl) {
+    roleSelectEl.addEventListener('change', syncAdminAddUserRoleFields);
+    syncAdminAddUserRoleFields();
+  }
 
   function renderAdminAll() {
     const users = state.users || [];
+    const students = users.filter((u) => u.role === 'student');
     const classes = state.classes || [];
     const logs = state.attendance || [];
 
     document.querySelector('#admin-count-users').textContent = String(users.length);
-    document.querySelector('#admin-count-students').textContent = String(
-      users.filter((u) => u.role === 'student').length
-    );
+    document.querySelector('#admin-count-students').textContent = String(students.length);
     document.querySelector('#admin-count-classes').textContent = String(classes.length);
     document.querySelector('#admin-count-logs').textContent = String(logs.length);
+
+    if (linkedStudentSelectEl) {
+      linkedStudentSelectEl.innerHTML =
+        `<option value="">-- Select Student (Child) --</option>` +
+        students
+          .map((s) => `<option value="${s.id}">${s.name} (${s.rollNo || 'Student'} · ${s.email})</option>`)
+          .join('');
+    }
 
     // Users table
     const usersTbody = document.querySelector('#admin-users-tbody');
     if (usersTbody) {
       usersTbody.innerHTML = users
-        .map(
-          (u) => `
+        .map((u) => {
+          let relationHtml = '';
+          if (u.role === 'student') {
+            const linkedParent = resolveLinkedParentForStudent(u, users);
+            const pLabel = linkedParent
+              ? `${linkedParent.name} (${linkedParent.email})`
+              : u.parentEmail
+              ? u.parentEmail
+              : null;
+            relationHtml = `
+              <div style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap">
+                <span class="badge ${u.facePhotoUrl ? 'ok' : 'warn'}">${
+              u.facePhotoUrl ? '✓ Face ID Enrolled' : 'No Face Photo'
+            }</span>
+                <span class="badge ${pLabel ? 'info' : ''}">${
+              pLabel ? `👪 Parent: ${pLabel}` : 'No Parent Linked'
+            }</span>
+              </div>
+            `;
+          } else if (u.role === 'parent') {
+            const linkedChild = resolveLinkedStudentForParent(u, users);
+            relationHtml = `
+              <div style="margin-top:6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                <span class="badge ok">🎓 Child: ${
+                  linkedChild ? `${linkedChild.name} (${linkedChild.rollNo})` : u.studentRollNo || 'Unlinked'
+                }</span>
+                <select data-admin-link-parent="${u.id}" style="width:auto;padding:4px 8px;font-size:.78rem">
+                  ${students
+                    .map(
+                      (s) =>
+                        `<option value="${s.id}" ${
+                          linkedChild && s.id === linkedChild.id ? 'selected' : ''
+                        }>Link to: ${s.name} (${s.rollNo})</option>`
+                    )
+                    .join('')}
+                </select>
+              </div>
+            `;
+          }
+
+          return `
         <tr>
           <td>
             ${
@@ -3294,14 +3859,8 @@ async function initAdminPortal() {
           <td>${u.email}</td>
           <td><span class="badge info">${u.role}</span></td>
           <td>
-            ${u.rollNo ? `Roll: ${u.rollNo} · ` : ''}${u.department || 'Institution'}
-            ${
-              u.role === 'student'
-                ? `<div style="margin-top:4px"><span class="badge ${u.facePhotoUrl ? 'ok' : 'warn'}">${
-                    u.facePhotoUrl ? '✓ Face ID Enrolled' : 'No Face Photo'
-                  }</span></div>`
-                : ''
-            }
+            ${u.rollNo ? `<strong>Roll: ${u.rollNo}</strong> · ` : ''}${u.department || 'Institution'}
+            ${relationHtml}
           </td>
           <td>
             <div class="row" style="gap:6px">
@@ -3316,9 +3875,37 @@ async function initAdminPortal() {
             </div>
           </td>
         </tr>
-      `
-        )
+      `;
+        })
         .join('');
+
+      usersTbody.querySelectorAll('[data-admin-link-parent]').forEach((sel) => {
+        sel.addEventListener('change', async () => {
+          const parentId = sel.dataset.adminLinkParent;
+          const studentId = sel.value;
+          if (!parentId || !studentId) return;
+          try {
+            const res = await apiRequest('/api/parent/link-student', {
+              method: 'PUT',
+              body: JSON.stringify({ parentId, studentIdentifier: studentId })
+            });
+            if (res.parent) {
+              const pIdx = state.users.findIndex((u) => u.id === res.parent.id);
+              if (pIdx !== -1) state.users[pIdx] = res.parent;
+            }
+            if (res.student) {
+              const sIdx = state.users.findIndex((u) => u.id === res.student.id);
+              if (sIdx !== -1) state.users[sIdx] = res.student;
+            }
+            if (adminFaceStatus && res.parent && res.student) {
+              adminFaceStatus.textContent = `✓ Linked parent ${res.parent.name} ↔ student ${res.student.name} (${res.student.rollNo}).`;
+            }
+            renderAdminAll();
+          } catch (err) {
+            alert(err.message || 'Could not link parent to student.');
+          }
+        });
+      });
 
       usersTbody.querySelectorAll('[data-admin-upload-face]').forEach((btn) => {
         btn.addEventListener('click', () => {
@@ -3447,7 +4034,7 @@ async function initAdminPortal() {
     }
   }
 
-  // Add user form (with optional student Reference Face Photo upload)
+  // Add user form (with optional student Reference Face Photo upload & Parent-Student linking)
   const addUserForm = document.querySelector('#admin-add-user-form');
   if (addUserForm) {
     addUserForm.addEventListener('submit', async (e) => {
@@ -3464,14 +4051,18 @@ async function initAdminPortal() {
           faceDescriptor = processed.descriptor;
         }
 
+        const selectedStudentId = linkedStudentSelectEl ? linkedStudentSelectEl.value : '';
+        const rollVal = document.querySelector('#u-roll').value.trim();
+
         const payload = {
           name: document.querySelector('#u-name').value.trim(),
           email: document.querySelector('#u-email').value.trim(),
           password: document.querySelector('#u-pass').value,
           role: document.querySelector('#u-role').value,
           department: document.querySelector('#u-dept').value.trim(),
-          rollNo: document.querySelector('#u-roll').value.trim(),
-          studentRollNo: document.querySelector('#u-roll').value.trim(),
+          rollNo: rollVal,
+          studentId: selectedStudentId || undefined,
+          studentRollNo: rollVal || undefined,
           facePhotoUrl,
           faceDescriptor
         };
@@ -3481,10 +4072,15 @@ async function initAdminPortal() {
         });
         if (res.user) {
           state.users.push(res.user);
+          if (res.user.role === 'parent' && res.user.studentId) {
+            const st = state.users.find((u) => u.id === res.user.studentId);
+            if (st) linkParentAndStudentLocal(res.user, st);
+          }
           addUserForm.reset();
+          syncAdminAddUserRoleFields();
           statusEl.textContent = `Added ${res.user.name} (${res.user.role})${
             facePhotoUrl ? ' with Reference Face ID' : ''
-          } to database.`;
+          }${res.user.studentName ? ` linked to ${res.user.studentName}` : ''} to database.`;
           renderAdminAll();
         }
       } catch (err) {

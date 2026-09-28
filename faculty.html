@@ -15,6 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap" />
 <link rel="stylesheet" href="css/styles.css" />
+<script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.js"></script>
 </head>
 <body data-page="faculty">
 <header class="app">
@@ -41,6 +42,7 @@
   <div class="tabs mt">
     <button class="active" data-target="classes" type="button">Classes</button>
     <button data-target="live" type="button">Live check-ins</button>
+    <button data-target="faces" type="button">🧬 Student Face Photos</button>
     <button data-target="reports" type="button">Reports</button>
   </div>
 
@@ -123,6 +125,34 @@
         <table>
           <thead><tr><th>Student</th><th>Roll no</th><th>Class</th><th>GPS Location &amp; Coordinates</th><th>Result</th><th>Distance</th><th>Time</th><th>GPS Photo</th><th>Action</th></tr></thead>
           <tbody id="faculty-live-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="tabpanel" data-tab="faces" hidden>
+    <div class="panel">
+      <div class="row between mb">
+        <div>
+          <h3>Enrolled Student Reference Face Photos</h3>
+          <p class="muted small">Upload or update reference portraits for students. During check-in, the student's live camera scan is matched against this reference photo.</p>
+        </div>
+        <span class="small muted" id="faculty-face-upload-status"></span>
+      </div>
+      <input type="file" id="faculty-face-file-input" accept="image/*" hidden />
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Reference Photo</th>
+              <th>Student Name</th>
+              <th>Roll No</th>
+              <th>Email</th>
+              <th>Biometric Status</th>
+              <th>Upload / Replace Photo</th>
+            </tr>
+          </thead>
+          <tbody id="faculty-students-faces-tbody"></tbody>
         </table>
       </div>
     </div>

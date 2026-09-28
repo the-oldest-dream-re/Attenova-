@@ -15,6 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap" />
 <link rel="stylesheet" href="css/styles.css" />
+<script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.js"></script>
 </head>
 <body data-page="admin">
 <header class="app">
@@ -60,7 +61,7 @@
   <section class="tabpanel" data-tab="users">
     <div class="panel mb">
       <h3>Add institutional user (Student / Faculty / Parent / Admin)</h3>
-      <p class="muted small">Passwords are encrypted with bcrypt before saving to the server database.</p>
+      <p class="muted small">Passwords are encrypted with bcrypt. For students, you can also upload a reference portrait photo for live face recognition check-ins.</p>
       <form id="admin-add-user-form" class="mt">
         <div class="grid grid-3">
           <div class="field">
@@ -69,14 +70,14 @@
           </div>
           <div class="field">
             <label for="u-email">Institutional email</label>
-            <input id="u-email" type="email" placeholder="rohan@college.edu" required />
+            <input id="u-email" type="email" placeholder="rohan@mgmmumbai.ac.in" required />
           </div>
           <div class="field">
             <label for="u-pass">Password</label>
             <input id="u-pass" type="password" placeholder="password123" value="password123" required />
           </div>
         </div>
-        <div class="grid grid-3">
+        <div class="grid grid-4">
           <div class="field">
             <label for="u-role">Role</label>
             <select id="u-role">
@@ -94,6 +95,10 @@
             <label for="u-roll">Roll No (Student or Child's Roll No)</label>
             <input id="u-roll" placeholder="CS21-018" />
           </div>
+          <div class="field">
+            <label for="u-face-file">Student Reference Face Photo</label>
+            <input id="u-face-file" type="file" accept="image/*" />
+          </div>
         </div>
         <div class="row">
           <button class="btn" type="submit">Add user to database</button>
@@ -103,10 +108,14 @@
     </div>
 
     <div class="panel">
-      <h3>Registered institutional users</h3>
+      <div class="row between mb">
+        <h3>Registered institutional users</h3>
+        <span class="small muted" id="admin-face-upload-status"></span>
+      </div>
+      <input type="file" id="admin-row-face-input" accept="image/*" hidden />
       <div class="table-wrap mt">
         <table>
-          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Department / Details</th><th>Action</th></tr></thead>
+          <thead><tr><th>Reference Face</th><th>Name</th><th>Email</th><th>Role</th><th>Department / Details</th><th>Action</th></tr></thead>
           <tbody id="admin-users-tbody"></tbody>
         </table>
       </div>

@@ -310,8 +310,19 @@ app.get('/api/data', authenticateToken, (req, res) => {
 
 // Add a new user (Admin or Institution registration)
 app.post('/api/users', authenticateToken, (req, res) => {
-  const { name, email, password, role, department, rollNo, semester, studentRollNo, parentEmail } =
-    req.body;
+  const {
+    name,
+    email,
+    password,
+    role,
+    department,
+    rollNo,
+    semester,
+    studentRollNo,
+    parentEmail,
+    facePhotoUrl,
+    faceDescriptor
+  } = req.body;
 
   if (!name || !email || !role) {
     return res.status(400).json({ error: 'Name, email, and role are required.' });
@@ -336,7 +347,9 @@ app.post('/api/users', authenticateToken, (req, res) => {
     department: department || 'Computer Science',
     rollNo: role === 'student' ? (rollNo || `CS21-${Math.floor(100 + Math.random() * 900)}`).trim() : undefined,
     semester: role === 'student' ? semester || 'Semester 5' : undefined,
-    faceEnrolled: role === 'student' ? true : undefined,
+    faceEnrolled: role === 'student' ? Boolean(facePhotoUrl) : undefined,
+    facePhotoUrl: role === 'student' ? facePhotoUrl || '' : undefined,
+    faceDescriptor: role === 'student' && Array.isArray(faceDescriptor) ? faceDescriptor : undefined,
     parentEmail: role === 'student' ? (parentEmail || '').trim().toLowerCase() : undefined,
     studentRollNo: role === 'parent' ? (studentRollNo || 'CS21-014').trim() : undefined,
     studentName: role === 'parent' ? (linkedStudent ? linkedStudent.name : 'Aarav Menon') : undefined,
@@ -355,6 +368,29 @@ app.post('/api/users', authenticateToken, (req, res) => {
   db.users.push(newUser);
   saveDB(db);
   res.status(201).json({ user: sanitizeUser(newUser) });
+});
+
+// Upload or update a student's reference face photo & biometric descriptor
+app.put('/api/users/:id/face', authenticateToken, (req, res) => {
+  const { facePhotoUrl, faceDescriptor } = req.body;
+  if (!facePhotoUrl) {
+    return res.status(400).json({ error: 'Reference face photo is required.' });
+  }
+
+  const db = loadDB();
+  let user = db.users.find((u) => u.id === req.params.id);
+  if (!user && req.user && req.user.email) {
+    user = db.users.find((u) => u.email.toLowerCase() === req.user.email.toLowerCase());
+  }
+  if (!user) return res.status(404).json({ error: 'Student not found' });
+
+  user.facePhotoUrl = facePhotoUrl;
+  user.faceDescriptor = Array.isArray(faceDescriptor) ? faceDescriptor : null;
+  user.faceEnrolled = true;
+  user.faceUpdatedAt = new Date().toISOString();
+
+  saveDB(db);
+  res.json({ ok: true, user: sanitizeUser(user) });
 });
 
 // Delete a user
@@ -431,6 +467,7 @@ app.post('/api/attendance', authenticateToken, (req, res) => {
     locationName,
     photoDataUrl,
     faceMatched = true,
+    faceScore,
     manualStatus
   } = req.body;
   const db = loadDB();
@@ -477,10 +514,11 @@ app.post('/api/attendance', authenticateToken, (req, res) => {
     alertTitle = `Attendance updated for ${cls.name}: ${manualStatus}`;
     alertDetail = `${displayDate}, ${timeStr} · recorded at ${finalPlace}`;
   } else if (!faceMatched) {
-    status = 'Face not matched';
+    const pctLabel = typeof faceScore === 'number' ? ` (${faceScore}% match)` : '';
+    status = `Rejected — Face not matched${pctLabel}`;
     badgeType = 'bad';
     alertTitle = `Face did not match for ${cls.name}`;
-    alertDetail = `${displayDate}, ${timeStr} · 📍 ${finalPlace}`;
+    alertDetail = `${displayDate}, ${timeStr} · Biometric face match failed${pctLabel} · 📍 ${finalPlace}`;
   } else if (distanceMeters > cls.radius) {
     status = 'Rejected — outside class area';
     badgeType = 'bad';
@@ -505,7 +543,8 @@ app.post('/api/attendance', authenticateToken, (req, res) => {
     lng: finalLng,
     locationName: finalPlace,
     photoDataUrl: photoDataUrl || '',
-    faceMatched: Boolean(faceMatched)
+    faceMatched: Boolean(faceMatched),
+    faceScore: typeof faceScore === 'number' ? faceScore : undefined
   };
 
   db.attendance.unshift(record);

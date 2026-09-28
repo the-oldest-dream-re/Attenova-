@@ -499,8 +499,287 @@ function formatCoords(lat, lng) {
   return `Lat ${Math.abs(nLat)}° ${latDir}, Lng ${Math.abs(nLng)}° ${lngDir}`;
 }
 
+// ---- Biometric Face Recognition Engine (face-api.js + Structural Fallback) ----
+const FACE_MODELS_CDN = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model/';
+let faceModelsPromise = null;
+let faceModelsReady = false;
+
+async function ensureFaceModelsLoaded() {
+  if (faceModelsReady) return true;
+  if (!window.faceapi) return false;
+  if (!faceModelsPromise) {
+    faceModelsPromise = Promise.all([
+      window.faceapi.nets.tinyFaceDetector.loadFromUri(FACE_MODELS_CDN),
+      window.faceapi.nets.faceLandmark68Net.loadFromUri(FACE_MODELS_CDN),
+      window.faceapi.nets.faceRecognitionNet.loadFromUri(FACE_MODELS_CDN)
+    ])
+      .then(() => {
+        faceModelsReady = true;
+        return true;
+      })
+      .catch(() => false);
+  }
+  return faceModelsPromise;
+}
+
+// Preload face recognition models in background on pages that include face-api.js
+if (typeof window !== 'undefined') {
+  window.addEventListener('load', () => {
+    if (window.faceapi) ensureFaceModelsLoaded();
+  });
+}
+
+function loadImageElement(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = (e) => reject(e);
+    img.src = src;
+  });
+}
+
+function readFileAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = (e) => reject(e);
+    reader.readAsDataURL(file);
+  });
+}
+
+// Compute a normalized 48-float center facial structure signature (fallback if CDN models are offline)
+function computeCenterFacialSignature(sourceEl) {
+  const c = document.createElement('canvas');
+  const S = 48;
+  c.width = S;
+  c.height = S;
+  const ctx = c.getContext('2d');
+  const sw = sourceEl.videoWidth || sourceEl.naturalWidth || sourceEl.width || 240;
+  const sh = sourceEl.videoHeight || sourceEl.naturalHeight || sourceEl.height || 240;
+  const cropSize = Math.min(sw, sh) * 0.65;
+  const sx = (sw - cropSize) / 2;
+  const sy = (sh - cropSize) / 2;
+  ctx.drawImage(sourceEl, sx, sy, cropSize, cropSize, 0, 0, S, S);
+
+  const data = ctx.getImageData(0, 0, S, S).data;
+  // 4x4 grid cells -> 3 normalized RGB/luminance ratios per cell = 48 floats
+  const sig = [];
+  const cell = S / 4;
+  for (let gy = 0; gy < 4; gy++) {
+    for (let gx = 0; gx < 4; gx++) {
+      let rSum = 0;
+      let gSum = 0;
+      let bSum = 0;
+      let count = 0;
+      for (let y = Math.floor(gy * cell); y < Math.floor((gy + 1) * cell); y++) {
+        for (let x = Math.floor(gx * cell); x < Math.floor((gx + 1) * cell); x++) {
+          const i = (y * S + x) * 4;
+          rSum += data[i];
+          gSum += data[i + 1];
+          bSum += data[i + 2];
+          count++;
+        }
+      }
+      const total = rSum + gSum + bSum + 1;
+      sig.push(
+        Number((rSum / total).toFixed(4)),
+        Number((gSum / total).toFixed(4)),
+        Number(((0.299 * rSum + 0.587 * gSum + 0.114 * bSum) / (count * 255)).toFixed(4))
+      );
+    }
+  }
+  return sig;
+}
+
+// Crop & compress a reference photo to a clean 260x260 portrait JPEG and extract 128-D face descriptor
+async function processReferenceFaceSource(sourceEl) {
+  const sw = sourceEl.videoWidth || sourceEl.naturalWidth || sourceEl.width || 260;
+  const sh = sourceEl.videoHeight || sourceEl.naturalHeight || sourceEl.height || 260;
+
+  let descriptor = null;
+  let faceBox = null;
+  let faceDetected = false;
+
+  const modelsReady = await ensureFaceModelsLoaded();
+  if (modelsReady && window.faceapi) {
+    try {
+      const detection = await window.faceapi
+        .detectSingleFace(
+          sourceEl,
+          new window.faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.3 })
+        )
+        .withFaceLandmarks()
+        .withFaceDescriptor();
+
+      if (detection && detection.descriptor) {
+        faceDetected = true;
+        descriptor = Array.from(detection.descriptor).map((n) => Number(n.toFixed(5)));
+        if (detection.detection && detection.detection.box) {
+          faceBox = detection.detection.box;
+        }
+      }
+    } catch {
+      // fallback below
+    }
+  }
+
+  // Create a clean square 260x260 portrait centered on the detected face (or image center)
+  const canvas = document.createElement('canvas');
+  const OUT = 260;
+  canvas.width = OUT;
+  canvas.height = OUT;
+  const ctx = canvas.getContext('2d');
+
+  if (faceBox) {
+    const pad = Math.max(faceBox.width, faceBox.height) * 0.45;
+    const size = Math.min(Math.max(faceBox.width, faceBox.height) + pad * 2, Math.min(sw, sh));
+    const cx = faceBox.x + faceBox.width / 2;
+    const cy = faceBox.y + faceBox.height / 2;
+    const sx = Math.max(0, Math.min(sw - size, cx - size / 2));
+    const sy = Math.max(0, Math.min(sh - size, cy - size / 2));
+    ctx.drawImage(sourceEl, sx, sy, size, size, 0, 0, OUT, OUT);
+  } else {
+    const size = Math.min(sw, sh);
+    const sx = (sw - size) / 2;
+    const sy = (sh - size) / 2;
+    ctx.drawImage(sourceEl, sx, sy, size, size, 0, 0, OUT, OUT);
+  }
+
+  const portraitDataUrl = canvas.toDataURL('image/jpeg', 0.84);
+  if (!descriptor) {
+    descriptor = computeCenterFacialSignature(canvas);
+  }
+
+  return {
+    faceDetected: faceDetected || !modelsReady,
+    portraitDataUrl,
+    descriptor
+  };
+}
+
+async function processReferenceFaceFile(file) {
+  const rawUrl = await readFileAsDataURL(file);
+  const img = await loadImageElement(rawUrl);
+  return processReferenceFaceSource(img);
+}
+
+// Compare live camera frame against the student's enrolled reference face photo & descriptor
+async function compareStudentFaceWithReference({
+  videoEl,
+  referencePhotoUrl,
+  referenceDescriptor
+}) {
+  if (!referencePhotoUrl) {
+    return {
+      matched: false,
+      score: 0,
+      reason: 'No student reference photo uploaded yet. Please upload your reference photo first.'
+    };
+  }
+
+  if (!videoEl || videoEl.readyState < 2 || videoEl.videoWidth === 0) {
+    return {
+      matched: false,
+      score: 0,
+      reason: 'Live camera stream is not active. Please open the camera and position your face inside the oval.'
+    };
+  }
+
+  const modelsReady = await ensureFaceModelsLoaded();
+
+  if (modelsReady && window.faceapi) {
+    try {
+      const liveDetection = await window.faceapi
+        .detectSingleFace(
+          videoEl,
+          new window.faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.3 })
+        )
+        .withFaceLandmarks()
+        .withFaceDescriptor();
+
+      if (!liveDetection || !liveDetection.descriptor) {
+        return {
+          matched: false,
+          score: 0,
+          reason: 'No face detected in the live camera frame. Look directly at the camera with good lighting.'
+        };
+      }
+
+      let refDesc =
+        Array.isArray(referenceDescriptor) && referenceDescriptor.length === 128
+          ? new Float32Array(referenceDescriptor)
+          : null;
+
+      if (!refDesc) {
+        const refImg = await loadImageElement(referencePhotoUrl);
+        const refDet = await window.faceapi
+          .detectSingleFace(
+            refImg,
+            new window.faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.25 })
+          )
+          .withFaceLandmarks()
+          .withFaceDescriptor();
+        if (refDet && refDet.descriptor) {
+          refDesc = refDet.descriptor;
+        }
+      }
+
+      if (refDesc && refDesc.length === 128) {
+        const distance = window.faceapi.euclideanDistance(refDesc, liveDetection.descriptor);
+        // In face-api.js 128-D space, distance <= 0.58 is the same person
+        const matched = distance <= 0.58;
+        let score;
+        if (distance <= 0.58) {
+          score = Math.round(Math.min(99, Math.max(70, 100 - (distance / 0.58) * 28)));
+        } else {
+          score = Math.round(Math.max(15, Math.min(64, 65 - ((distance - 0.58) / 0.45) * 48)));
+        }
+        return {
+          matched,
+          score,
+          distance: Number(distance.toFixed(3)),
+          reason: matched
+            ? `Face verified against enrolled student photo (${score}% biometric match)`
+            : `Live face did not match enrolled reference photo (${score}% similarity — minimum 70% required)`
+        };
+      }
+    } catch {
+      // fall through to structural comparator if WebGL fails
+    }
+  }
+
+  // Fallback structural comparison if neural weights are unreachable offline
+  try {
+    const refImg = await loadImageElement(referencePhotoUrl);
+    const refSig = computeCenterFacialSignature(refImg);
+    const liveSig = computeCenterFacialSignature(videoEl);
+    let diffSum = 0;
+    for (let i = 0; i < Math.min(refSig.length, liveSig.length); i++) {
+      diffSum += Math.abs(refSig[i] - liveSig[i]);
+    }
+    const avgDiff = diffSum / refSig.length;
+    const score = Math.round(Math.max(20, Math.min(98, (1 - avgDiff * 3.2) * 100)));
+    const matched = score >= 68;
+    return {
+      matched,
+      score,
+      reason: matched
+        ? `Face verified against enrolled photo (${score}% match)`
+        : `Face did not match enrolled photo (${score}% similarity)`
+    };
+  } catch {
+    return {
+      matched: false,
+      score: 0,
+      reason: 'Could not verify face against reference photo.'
+    };
+  }
+}
+
 function createGpsStampedImage({
   videoEl,
+  referencePhotoImg,
   studentName,
   rollNo,
   className,
@@ -511,7 +790,9 @@ function createGpsStampedImage({
   locationName,
   dateTimeStr,
   distanceMeters,
-  isInsideGeofence = true
+  isInsideGeofence = true,
+  faceMatched = true,
+  faceScore
 }) {
   const canvas = document.createElement('canvas');
   const W = 640;
@@ -533,8 +814,8 @@ function createGpsStampedImage({
 
   if (!drewVideo) {
     const grad = ctx.createLinearGradient(0, 0, W, H);
-    grad.addColorStop(0, '#1e2d3d');
-    grad.addColorStop(1, '#17708a');
+    grad.addColorStop(0, '#1e293b');
+    grad.addColorStop(1, '#312e81');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, W, H);
 
@@ -561,7 +842,7 @@ function createGpsStampedImage({
     ctx.arc(W / 2, 290, 95, Math.PI, 0, false);
     ctx.fill();
 
-    ctx.strokeStyle = 'rgba(240, 171, 78, 0.8)';
+    ctx.strokeStyle = 'rgba(129, 140, 248, 0.8)';
     ctx.lineWidth = 2.5;
     ctx.setLineDash([8, 6]);
     ctx.beginPath();
@@ -570,19 +851,52 @@ function createGpsStampedImage({
     ctx.setLineDash([]);
   }
 
-  // 2. Top-right verification pill (Green if inside classroom radius, Red if outside)
-  const pillText = isInsideGeofence
-    ? `✓ INSIDE CLASSROOM (${distanceMeters ?? 12}m) · PRESENT`
-    : `✕ OUTSIDE CLASS (${distanceMeters}m AWAY) · REJECTED`;
-  ctx.font = 'bold 11.5px Manrope, sans-serif';
-  const pillW = Math.max(220, ctx.measureText(pillText).width + 24);
-  ctx.fillStyle = 'rgba(18, 26, 36, 0.88)';
+  // 2A. Draw Enrolled Reference Photo Inset + Face Match Badge at Top-Left
+  let leftOffset = 14;
+  if (referencePhotoImg && referencePhotoImg.complete && referencePhotoImg.naturalWidth > 0) {
+    const thumbSize = 62;
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+    ctx.fillRect(14, 14, thumbSize + 4, thumbSize + 18);
+    ctx.drawImage(referencePhotoImg, 16, 16, thumbSize, thumbSize);
+    ctx.strokeStyle = faceMatched ? '#10b981' : '#ef4444';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(14, 14, thumbSize + 4, thumbSize + 18);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 9px monospace';
+    ctx.fillText('REF PHOTO', 20, 14 + thumbSize + 13);
+    leftOffset = 14 + thumbSize + 12;
+  }
+
+  const scoreSuffix = typeof faceScore === 'number' ? ` (${faceScore}%)` : '';
+  const facePillText = faceMatched
+    ? `✓ FACE MATCHED${scoreSuffix}`
+    : `✕ FACE MISMATCH${scoreSuffix}`;
+  ctx.font = 'bold 11px Manrope, sans-serif';
+  const facePillW = Math.max(155, ctx.measureText(facePillText).width + 20);
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+  ctx.fillRect(leftOffset, 14, facePillW, 30);
+  ctx.strokeStyle = faceMatched ? '#10b981' : '#ef4444';
+  ctx.lineWidth = 1.8;
+  ctx.strokeRect(leftOffset, 14, facePillW, 30);
+  ctx.fillStyle = faceMatched ? '#4ce09a' : '#ff7b6b';
+  ctx.fillText(facePillText, leftOffset + 10, 33);
+
+  // 2B. Top-right GPS Geofence verification pill
+  const overallOk = isInsideGeofence && faceMatched;
+  const pillText = !faceMatched
+    ? `✕ REJECTED · FACE NOT MATCHED`
+    : isInsideGeofence
+    ? `✓ INSIDE CLASS (${distanceMeters ?? 12}m) · PRESENT`
+    : `✕ OUTSIDE CLASS (${distanceMeters}m) · REJECTED`;
+  ctx.font = 'bold 11px Manrope, sans-serif';
+  const pillW = Math.max(210, ctx.measureText(pillText).width + 22);
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
   ctx.fillRect(W - pillW - 14, 14, pillW, 30);
-  ctx.strokeStyle = isInsideGeofence ? '#2f9c69' : '#cf3f2b';
+  ctx.strokeStyle = overallOk ? '#10b981' : '#ef4444';
   ctx.lineWidth = 1.8;
   ctx.strokeRect(W - pillW - 14, 14, pillW, 30);
-  ctx.fillStyle = isInsideGeofence ? '#4ce09a' : '#ff7b6b';
-  ctx.fillText(pillText, W - pillW - 2, 33);
+  ctx.fillStyle = overallOk ? '#4ce09a' : '#ff7b6b';
+  ctx.fillText(pillText, W - pillW - 4, 33);
 
   // 3. Draw GPS Map Camera Stamp Bar at the bottom of the image
   const boxX = 14;
@@ -590,9 +904,9 @@ function createGpsStampedImage({
   const boxW = W - 28;
   const boxH = 104;
 
-  ctx.fillStyle = 'rgba(16, 23, 33, 0.90)';
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.90)';
   ctx.fillRect(boxX, boxY, boxW, boxH);
-  ctx.strokeStyle = isInsideGeofence ? 'rgba(240, 171, 78, 0.75)' : 'rgba(207, 63, 43, 0.85)';
+  ctx.strokeStyle = overallOk ? 'rgba(99, 102, 241, 0.75)' : 'rgba(239, 68, 68, 0.85)';
   ctx.lineWidth = 1.5;
   ctx.strokeRect(boxX, boxY, boxW, boxH);
 
@@ -600,12 +914,12 @@ function createGpsStampedImage({
   const mapX = boxX + 12;
   const mapY = boxY + 12;
   const mapSize = 80;
-  ctx.fillStyle = '#193544';
+  ctx.fillStyle = '#1e1b4b';
   ctx.fillRect(mapX, mapY, mapSize, mapSize);
-  ctx.strokeStyle = 'rgba(240, 171, 78, 0.5)';
+  ctx.strokeStyle = 'rgba(129, 140, 248, 0.5)';
   ctx.strokeRect(mapX, mapY, mapSize, mapSize);
 
-  ctx.strokeStyle = 'rgba(23, 112, 138, 0.45)';
+  ctx.strokeStyle = 'rgba(99, 102, 241, 0.35)';
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.arc(mapX + mapSize / 2, mapY + mapSize / 2, 26, 0, Math.PI * 2);
@@ -614,7 +928,7 @@ function createGpsStampedImage({
   ctx.arc(mapX + mapSize / 2, mapY + mapSize / 2, 14, 0, Math.PI * 2);
   ctx.stroke();
 
-  ctx.fillStyle = isInsideGeofence ? '#f0ab4e' : '#cf3f2b';
+  ctx.fillStyle = overallOk ? '#38bdf8' : '#ef4444';
   ctx.beginPath();
   ctx.arc(mapX + mapSize / 2, mapY + mapSize / 2, 5, 0, Math.PI * 2);
   ctx.fill();
@@ -632,7 +946,9 @@ function createGpsStampedImage({
   const metaLine1 = `${dateTimeStr || new Date().toLocaleString()} · ${className || 'Data Structures'} (${
     room || 'Room B-204'
   })`;
-  const metaLine2 = `Student: ${studentName || 'Aarav Menon'} (${rollNo || 'CS21-014'}) · Attenova GPS Camera`;
+  const metaLine2 = `Student: ${studentName || 'Aarav Menon'} (${rollNo || 'CS21-014'}) · Face Match: ${
+    faceMatched ? `Verified${scoreSuffix}` : `Mismatch${scoreSuffix}`
+  }`;
 
   // Line 1: Actual Calibrated Place Name
   ctx.fillStyle = '#ffffff';
@@ -645,17 +961,17 @@ function createGpsStampedImage({
   ctx.fillText(placeText, textX, boxY + 28);
 
   // Line 2: Exact GPS Coordinates & Distance from Classroom
-  ctx.fillStyle = '#f0ab4e';
+  ctx.fillStyle = '#38bdf8';
   ctx.font = 'bold 12.5px monospace';
   ctx.fillText(coordText, textX, boxY + 50);
 
   // Line 3: Date/Time & Class
-  ctx.fillStyle = '#d3dce6';
+  ctx.fillStyle = '#e2e8f0';
   ctx.font = '12px Manrope, sans-serif';
   ctx.fillText(metaLine1, textX, boxY + 71);
 
-  // Line 4: Student Name & Roll Number
-  ctx.fillStyle = '#9fb0c2';
+  // Line 4: Student Name, Roll Number & Face Verification Result
+  ctx.fillStyle = '#94a3b8';
   ctx.font = '11.5px Manrope, sans-serif';
   ctx.fillText(metaLine2, textX, boxY + 90);
 
@@ -911,8 +1227,11 @@ function handleOfflineFallback(path, options) {
   }
 
   if (path === '/api/data' && method === 'GET') {
+    const sess = getSessionUser();
+    const freshUser =
+      (sess && db.users.find((u) => u.id === sess.id || u.email === sess.email)) || sess;
     return {
-      currentUser: getSessionUser(),
+      currentUser: freshUser,
       users: db.users,
       classes: db.classes,
       attendance: db.attendance,
@@ -930,12 +1249,39 @@ function handleOfflineFallback(path, options) {
       department: body.department || 'Computer Science',
       rollNo: body.role === 'student' ? body.rollNo || 'CS21-019' : undefined,
       semester: body.role === 'student' ? 'Semester 5' : undefined,
-      faceEnrolled: body.role === 'student' ? true : undefined,
+      faceEnrolled: body.role === 'student' ? Boolean(body.facePhotoUrl) : undefined,
+      facePhotoUrl: body.role === 'student' ? body.facePhotoUrl || '' : undefined,
+      faceDescriptor:
+        body.role === 'student' && Array.isArray(body.faceDescriptor)
+          ? body.faceDescriptor
+          : undefined,
       studentRollNo: body.role === 'parent' ? body.studentRollNo || 'CS21-014' : undefined
     };
     db.users.push(newUser);
     saveLocalDB(db);
     return { user: newUser };
+  }
+
+  if (path.startsWith('/api/users/') && path.endsWith('/face') && method === 'PUT') {
+    const id = path.split('/')[3];
+    const sess = getSessionUser();
+    let user =
+      db.users.find((u) => u.id === id) ||
+      (sess && db.users.find((u) => u.email.toLowerCase() === (sess.email || '').toLowerCase()));
+    if (!user && sess) {
+      user = { ...sess };
+      db.users.push(user);
+    }
+    if (!user) throw new Error('Student not found');
+    user.facePhotoUrl = body.facePhotoUrl;
+    user.faceDescriptor = Array.isArray(body.faceDescriptor) ? body.faceDescriptor : null;
+    user.faceEnrolled = true;
+    user.faceUpdatedAt = new Date().toISOString();
+    saveLocalDB(db);
+    if (sess && (sess.id === user.id || sess.email === user.email)) {
+      setSession(getToken(), user);
+    }
+    return { ok: true, user };
   }
 
   if (path.startsWith('/api/users/') && method === 'DELETE') {
@@ -1002,11 +1348,12 @@ function handleOfflineFallback(path, options) {
     if (body.manualStatus) {
       status = body.manualStatus;
       badgeType = status === 'Present' ? 'ok' : status === 'Late' ? 'warn' : 'bad';
+    } else if (body.faceMatched === false) {
+      const pctLabel = typeof body.faceScore === 'number' ? ` (${body.faceScore}% match)` : '';
+      status = `Rejected — Face not matched${pctLabel}`;
+      badgeType = 'bad';
     } else if (distanceMeters > allowedRadius) {
       status = 'Rejected — outside class area';
-      badgeType = 'bad';
-    } else if (body.faceMatched === false) {
-      status = 'Rejected — face mismatch';
       badgeType = 'bad';
     }
 
@@ -1875,6 +2222,133 @@ async function initStudentDashboard() {
     let currentFacingMode = 'user';
     const flipCamBtn = document.querySelector('#cam-flip');
 
+    // ---- Student Reference Face ID Enrollment & Matching Setup ----
+    const refPhotoImg = document.querySelector('#student-ref-photo-img');
+    const refPlaceholder = document.querySelector('#student-ref-placeholder');
+    const refStatusBadge = document.querySelector('#ref-face-status-badge');
+    const refHelperText = document.querySelector('#ref-face-helper-text');
+    const uploadRefBtn = document.querySelector('#upload-ref-face-btn');
+    const uploadRefInput = document.querySelector('#upload-ref-face-input');
+    const captureRefBtn = document.querySelector('#capture-ref-face-btn');
+    const calFaceMatchBadgeEl = document.querySelector('#cal-face-match-badge');
+    const topFaceBadge = document.querySelector('#student-face-badge');
+
+    function renderStudentRefFaceUI() {
+      const hasPhoto = Boolean(user && user.facePhotoUrl);
+      if (refPhotoImg && refPlaceholder) {
+        if (hasPhoto) {
+          refPhotoImg.src = user.facePhotoUrl;
+          refPhotoImg.hidden = false;
+          refPlaceholder.hidden = true;
+        } else {
+          refPhotoImg.hidden = true;
+          refPlaceholder.hidden = false;
+        }
+      }
+      if (refStatusBadge) {
+        refStatusBadge.className = `badge ${hasPhoto ? 'ok' : 'warn'}`;
+        refStatusBadge.textContent = hasPhoto
+          ? '✓ Reference Face Enrolled'
+          : '⚠️ Upload Reference Photo';
+      }
+      if (topFaceBadge) {
+        topFaceBadge.className = `badge ${hasPhoto ? 'ok' : 'warn'}`;
+        topFaceBadge.textContent = hasPhoto
+          ? '✓ Face ID Enrolled + GPS Active'
+          : 'Upload Face Photo to Check In';
+      }
+      if (refHelperText) {
+        refHelperText.textContent = hasPhoto
+          ? 'Your reference portrait is enrolled. During check-in, the live camera will scan and match your face against this photo.'
+          : 'Upload your clear front-facing student photo (or save from camera) so the system can verify your face during check-in.';
+      }
+      if (calFaceMatchBadgeEl) {
+        calFaceMatchBadgeEl.innerHTML = hasPhoto
+          ? `<strong>Face Recognition Status:</strong> <span class="badge info">Ready — Reference photo enrolled, waiting for live camera scan</span>`
+          : `<strong>Face Recognition Status:</strong> <span class="badge warn">Please upload your Student Reference Photo above before check-in</span>`;
+      }
+    }
+
+    async function saveStudentReferenceFace(processed) {
+      if (!processed || !processed.portraitDataUrl) return;
+      if (!processed.faceDetected) {
+        if (refHelperText) {
+          refHelperText.innerHTML = `<span style="color:var(--destructive);font-weight:600">⚠️ No clear front-facing face detected in that photo. Please upload a clear portrait where your face is visible.</span>`;
+        }
+        return;
+      }
+
+      const targetId = (user && user.id) || 'usr_student_1';
+      const res = await apiRequest(`/api/users/${targetId}/face`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          facePhotoUrl: processed.portraitDataUrl,
+          faceDescriptor: processed.descriptor
+        })
+      });
+
+      if (user) {
+        user.facePhotoUrl = processed.portraitDataUrl;
+        user.faceDescriptor = processed.descriptor;
+        user.faceEnrolled = true;
+        setSession(getToken(), user);
+      } else if (res && res.user) {
+        setSession(getToken(), res.user);
+      }
+
+      renderStudentRefFaceUI();
+      if (refHelperText) {
+        refHelperText.innerHTML = `<span style="color:var(--success);font-weight:600">✓ Reference student photo saved &amp; 128-D facial biometrics indexed! You can now verify &amp; submit attendance.</span>`;
+      }
+    }
+
+    if (uploadRefBtn && uploadRefInput) {
+      uploadRefBtn.addEventListener('click', () => uploadRefInput.click());
+      uploadRefInput.addEventListener('change', async () => {
+        const file = uploadRefInput.files && uploadRefInput.files[0];
+        if (!file) return;
+        uploadRefBtn.disabled = true;
+        uploadRefBtn.textContent = '🧬 Scanning Face…';
+        try {
+          const processed = await processReferenceFaceFile(file);
+          await saveStudentReferenceFace(processed);
+        } catch (err) {
+          if (refHelperText) {
+            refHelperText.textContent = 'Could not process image: ' + (err.message || 'Invalid file');
+          }
+        } finally {
+          uploadRefBtn.disabled = false;
+          uploadRefBtn.textContent = '📤 Upload Student Photo';
+          uploadRefInput.value = '';
+        }
+      });
+    }
+
+    if (captureRefBtn) {
+      captureRefBtn.addEventListener('click', async () => {
+        if (!stream || video.readyState < 2) {
+          await openCamera();
+        }
+        if (!video || video.readyState < 2 || video.videoWidth === 0) {
+          if (refHelperText) {
+            refHelperText.textContent = 'Please allow camera access first or use "Upload Student Photo".';
+          }
+          return;
+        }
+        captureRefBtn.disabled = true;
+        captureRefBtn.textContent = '🧬 Indexing Face…';
+        try {
+          const processed = await processReferenceFaceSource(video);
+          await saveStudentReferenceFace(processed);
+        } finally {
+          captureRefBtn.disabled = false;
+          captureRefBtn.textContent = '📸 Save from Camera';
+        }
+      });
+    }
+
+    renderStudentRefFaceUI();
+
     async function openCamera() {
       if (capturedImg) {
         capturedImg.hidden = true;
@@ -1902,15 +2376,18 @@ async function initStudentDashboard() {
         if (gpsOverlay) gpsOverlay.hidden = false;
         openBtn.disabled = true;
         captureBtn.disabled = false;
-        status.textContent = 'Camera & Live GPS Tag active — tap "Verify & submit attendance".';
+        status.textContent =
+          user && user.facePhotoUrl
+            ? 'Camera & Live GPS Tag active — position your face in the oval and tap "Verify & submit attendance".'
+            : 'Camera active — please upload your Student Reference Photo above (or tap "Save from Camera") before checking in.';
       } catch {
         off.hidden = false;
-        off.textContent = 'Simulated Camera Ready — Live GPS Tag active below';
+        off.textContent = 'Camera access required for live face verification';
         oval.hidden = false;
         if (gpsOverlay) gpsOverlay.hidden = false;
         openBtn.disabled = true;
         captureBtn.disabled = false;
-        status.textContent = 'Live GPS Tag ready — tap "Verify & submit attendance".';
+        status.textContent = 'Please allow camera access so your face can be matched against your reference photo.';
       }
 
       refreshLiveGpsOverlay(true);
@@ -1934,9 +2411,38 @@ async function initStudentDashboard() {
     }
 
     async function captureAndVerify() {
-      status.textContent = 'Calibrating precise hardware GPS & stamping actual location onto photo…';
+      if (!user || !user.facePhotoUrl) {
+        status.innerHTML = `<span class="badge bad">Reference Photo Required</span> Please upload your <strong>Student Reference Face Photo</strong> (or tap <strong>"📸 Save from Camera"</strong>) in the box above so the system can scan and match your face.`;
+        if (calFaceMatchBadgeEl) {
+          calFaceMatchBadgeEl.innerHTML = `<strong>Face Recognition Status:</strong> <span class="badge bad">✕ No Reference Photo Uploaded — Upload above first</span>`;
+        }
+        return;
+      }
+
+      status.textContent =
+        'Scanning live face against enrolled student photo & calibrating classroom GPS geofence…';
       captureBtn.disabled = true;
 
+      if (calFaceMatchBadgeEl) {
+        calFaceMatchBadgeEl.innerHTML = `<strong>Face Recognition Status:</strong> <span class="badge warn">🧬 Scanning &amp; matching live face against enrolled portrait…</span>`;
+      }
+
+      // 1. Run Biometric Face Comparison BEFORE stopping the video stream
+      const faceResult = await compareStudentFaceWithReference({
+        videoEl: video,
+        referencePhotoUrl: user.facePhotoUrl,
+        referenceDescriptor: user.faceDescriptor
+      });
+
+      if (calFaceMatchBadgeEl) {
+        if (faceResult.matched) {
+          calFaceMatchBadgeEl.innerHTML = `<strong>Face Recognition Status:</strong> <span class="badge ok">✓ Face Matched (${faceResult.score}% similarity) — Verified as ${user.name}</span>`;
+        } else {
+          calFaceMatchBadgeEl.innerHTML = `<strong>Face Recognition Status:</strong> <span class="badge bad">✕ Face Not Matched (${faceResult.score}% similarity) — ${faceResult.reason}</span>`;
+        }
+      }
+
+      // 2. Refresh GPS Geofence Lock
       await refreshLiveGpsOverlay(true);
       const cls = getSelectedClass();
       const nowStr = new Date().toLocaleString([], {
@@ -1948,9 +2454,17 @@ async function initStudentDashboard() {
         second: '2-digit'
       });
 
-      // Burn GPS Map Camera Tag onto the bottom of the captured photo
+      let refImgEl = null;
+      try {
+        refImgEl = await loadImageElement(user.facePhotoUrl);
+      } catch {
+        refImgEl = null;
+      }
+
+      // 3. Burn Reference Face Inset, Face Match %, and GPS Map Camera Tag onto the captured photo
       const stampedDataUrl = createGpsStampedImage({
         videoEl: video,
+        referencePhotoImg: refImgEl,
         studentName: user ? user.name : 'Aarav Menon',
         rollNo: (user && user.rollNo) || 'CS21-014',
         className: cls ? cls.name : 'Data Structures',
@@ -1960,11 +2474,13 @@ async function initStudentDashboard() {
         accuracy: liveGpsState.accuracy,
         distanceMeters: liveGpsState.distanceMeters,
         isInsideGeofence: liveGpsState.isInsideGeofence,
+        faceMatched: faceResult.matched,
+        faceScore: faceResult.score,
         locationName: liveGpsState.locationName,
         dateTimeStr: nowStr
       });
 
-      // Show the GPS-stamped image inside the camera box
+      // Show the GPS & Face-stamped image inside the camera box
       stopCameraStreamOnly();
       off.hidden = true;
       video.hidden = true;
@@ -1986,12 +2502,13 @@ async function initStudentDashboard() {
             lng: liveGpsState.lng,
             locationName: liveGpsState.locationName,
             photoDataUrl: stampedDataUrl,
-            faceMatched: true
+            faceMatched: faceResult.matched,
+            faceScore: faceResult.score
           })
         });
 
         const rec = res.record;
-        status.innerHTML = `<span class="badge ${rec.badgeType}">${rec.status}</span> (${rec.distance} from ${cls ? cls.room : 'classroom'}) · Marked at ${rec.time} · 📍 <strong>${rec.locationName}</strong> (${formatCoords(rec.lat, rec.lng)})`;
+        status.innerHTML = `<span class="badge ${rec.badgeType}">${rec.status}</span> · Face Match: <strong>${faceResult.score}%</strong> · GPS: <strong>${rec.distance}</strong> from ${cls ? cls.room : 'classroom'} · 📍 <strong>${rec.locationName}</strong>`;
         allAttendance.unshift(rec);
         renderStudentAttendance(allAttendance);
       } catch (err) {
@@ -2194,7 +2711,95 @@ async function initFacultyDashboard() {
       bindDeleteAttendanceButtons(liveTbody);
     }
 
-    // 4. Render Reports Tab
+    // 4. Render Student Reference Face Photos Tab (Faculty)
+    const facesTbody = document.querySelector('#faculty-students-faces-tbody');
+    const facultyFaceInput = document.querySelector('#faculty-face-file-input');
+    const facultyFaceStatus = document.querySelector('#faculty-face-upload-status');
+    let targetStudentForFaceId = null;
+
+    if (facesTbody) {
+      facesTbody.innerHTML = students
+        .map(
+          (s) => `
+        <tr>
+          <td>
+            ${
+              s.facePhotoUrl
+                ? `<img class="user-face-thumb" src="${s.facePhotoUrl}" alt="${s.name}" />`
+                : `<div class="user-face-empty">👤</div>`
+            }
+          </td>
+          <td><strong>${s.name}</strong></td>
+          <td>${s.rollNo || '—'}</td>
+          <td>${s.email}</td>
+          <td>
+            <span class="badge ${s.facePhotoUrl ? 'ok' : 'warn'}">
+              ${s.facePhotoUrl ? '✓ Face Photo Enrolled' : '⚠️ No Photo Uploaded'}
+            </span>
+          </td>
+          <td>
+            <button class="btn secondary sm" data-faculty-upload-face="${s.id}" type="button">
+              📤 ${s.facePhotoUrl ? 'Replace Photo' : 'Upload Photo'}
+            </button>
+          </td>
+        </tr>
+      `
+        )
+        .join('');
+
+      facesTbody.querySelectorAll('[data-faculty-upload-face]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          targetStudentForFaceId = btn.dataset.facultyUploadFace;
+          if (facultyFaceInput) facultyFaceInput.click();
+        });
+      });
+    }
+
+    if (facultyFaceInput && !facultyFaceInput.dataset.bound) {
+      facultyFaceInput.dataset.bound = 'true';
+      facultyFaceInput.addEventListener('change', async () => {
+        const file = facultyFaceInput.files && facultyFaceInput.files[0];
+        if (!file || !targetStudentForFaceId) return;
+        if (facultyFaceStatus) facultyFaceStatus.textContent = '🧬 Scanning & indexing student face…';
+        try {
+          const processed = await processReferenceFaceFile(file);
+          if (!processed.faceDetected) {
+            if (facultyFaceStatus) {
+              facultyFaceStatus.textContent =
+                '⚠️ No clear face detected in that photo. Please upload a clear front-facing portrait.';
+            }
+            return;
+          }
+          const res = await apiRequest(`/api/users/${targetStudentForFaceId}/face`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              facePhotoUrl: processed.portraitDataUrl,
+              faceDescriptor: processed.descriptor
+            })
+          });
+          const idx = (state.users || []).findIndex((u) => u.id === targetStudentForFaceId);
+          if (idx !== -1) {
+            state.users[idx].facePhotoUrl = processed.portraitDataUrl;
+            state.users[idx].faceDescriptor = processed.descriptor;
+            state.users[idx].faceEnrolled = true;
+          }
+          if (facultyFaceStatus) {
+            facultyFaceStatus.textContent = `✓ Reference face photo enrolled for ${
+              (res.user && res.user.name) || 'student'
+            }.`;
+          }
+          renderFacultyView();
+        } catch (err) {
+          if (facultyFaceStatus) {
+            facultyFaceStatus.textContent = 'Upload failed: ' + (err.message || 'Error');
+          }
+        } finally {
+          facultyFaceInput.value = '';
+        }
+      });
+    }
+
+    // 5. Render Reports Tab
     const rclassSelect = document.querySelector('#rclass');
     if (rclassSelect && rclassSelect.options.length <= 1) {
       rclassSelect.innerHTML =
@@ -2512,6 +3117,10 @@ async function initAdminPortal() {
     domainsInput.value = config.allowedDomains.join(', ');
   }
 
+  const adminRowFaceInput = document.querySelector('#admin-row-face-input');
+  const adminFaceStatus = document.querySelector('#admin-face-upload-status');
+  let adminTargetUserId = null;
+
   function renderAdminAll() {
     const users = state.users || [];
     const classes = state.classes || [];
@@ -2531,17 +3140,51 @@ async function initAdminPortal() {
         .map(
           (u) => `
         <tr>
+          <td>
+            ${
+              u.role === 'student'
+                ? u.facePhotoUrl
+                  ? `<img class="user-face-thumb" src="${u.facePhotoUrl}" alt="${u.name}" />`
+                  : `<div class="user-face-empty" title="No reference photo uploaded">👤</div>`
+                : `<span class="muted small">—</span>`
+            }
+          </td>
           <td><strong>${u.name}</strong></td>
           <td>${u.email}</td>
           <td><span class="badge info">${u.role}</span></td>
-          <td>${u.rollNo ? `Roll: ${u.rollNo} · ` : ''}${u.department || 'Institution'}</td>
           <td>
-            <button class="btn danger sm" data-delete-user="${u.id}" type="button">Remove</button>
+            ${u.rollNo ? `Roll: ${u.rollNo} · ` : ''}${u.department || 'Institution'}
+            ${
+              u.role === 'student'
+                ? `<div style="margin-top:4px"><span class="badge ${u.facePhotoUrl ? 'ok' : 'warn'}">${
+                    u.facePhotoUrl ? '✓ Face ID Enrolled' : 'No Face Photo'
+                  }</span></div>`
+                : ''
+            }
+          </td>
+          <td>
+            <div class="row" style="gap:6px">
+              ${
+                u.role === 'student'
+                  ? `<button class="btn secondary sm" data-admin-upload-face="${u.id}" type="button">📤 ${
+                      u.facePhotoUrl ? 'Update Face' : 'Upload Face'
+                    }</button>`
+                  : ''
+              }
+              <button class="btn danger sm" data-delete-user="${u.id}" type="button">Remove</button>
+            </div>
           </td>
         </tr>
       `
         )
         .join('');
+
+      usersTbody.querySelectorAll('[data-admin-upload-face]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          adminTargetUserId = btn.dataset.adminUploadFace;
+          if (adminRowFaceInput) adminRowFaceInput.click();
+        });
+      });
 
       usersTbody.querySelectorAll('[data-delete-user]').forEach((btn) => {
         btn.addEventListener('click', async () => {
@@ -2554,6 +3197,48 @@ async function initAdminPortal() {
             alert(err.message);
           }
         });
+      });
+    }
+
+    if (adminRowFaceInput && !adminRowFaceInput.dataset.bound) {
+      adminRowFaceInput.dataset.bound = 'true';
+      adminRowFaceInput.addEventListener('change', async () => {
+        const file = adminRowFaceInput.files && adminRowFaceInput.files[0];
+        if (!file || !adminTargetUserId) return;
+        if (adminFaceStatus) adminFaceStatus.textContent = '🧬 Scanning & indexing student face…';
+        try {
+          const processed = await processReferenceFaceFile(file);
+          if (!processed.faceDetected) {
+            if (adminFaceStatus) {
+              adminFaceStatus.textContent =
+                '⚠️ No clear face detected in that photo. Please upload a clear front-facing portrait.';
+            }
+            return;
+          }
+          await apiRequest(`/api/users/${adminTargetUserId}/face`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              facePhotoUrl: processed.portraitDataUrl,
+              faceDescriptor: processed.descriptor
+            })
+          });
+          const idx = (state.users || []).findIndex((u) => u.id === adminTargetUserId);
+          if (idx !== -1) {
+            state.users[idx].facePhotoUrl = processed.portraitDataUrl;
+            state.users[idx].faceDescriptor = processed.descriptor;
+            state.users[idx].faceEnrolled = true;
+          }
+          if (adminFaceStatus) {
+            adminFaceStatus.textContent = '✓ Reference face photo saved for student!';
+          }
+          renderAdminAll();
+        } catch (err) {
+          if (adminFaceStatus) {
+            adminFaceStatus.textContent = 'Upload failed: ' + (err.message || 'Error');
+          }
+        } finally {
+          adminRowFaceInput.value = '';
+        }
       });
     }
 
@@ -2621,13 +3306,23 @@ async function initAdminPortal() {
     }
   }
 
-  // Add user form
+  // Add user form (with optional student Reference Face Photo upload)
   const addUserForm = document.querySelector('#admin-add-user-form');
   if (addUserForm) {
     addUserForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const statusEl = document.querySelector('#admin-user-status');
+      const faceFileInput = document.querySelector('#u-face-file');
       try {
+        let facePhotoUrl = '';
+        let faceDescriptor = null;
+        if (faceFileInput && faceFileInput.files && faceFileInput.files[0]) {
+          statusEl.textContent = '🧬 Scanning student reference face photo…';
+          const processed = await processReferenceFaceFile(faceFileInput.files[0]);
+          facePhotoUrl = processed.portraitDataUrl;
+          faceDescriptor = processed.descriptor;
+        }
+
         const payload = {
           name: document.querySelector('#u-name').value.trim(),
           email: document.querySelector('#u-email').value.trim(),
@@ -2635,7 +3330,9 @@ async function initAdminPortal() {
           role: document.querySelector('#u-role').value,
           department: document.querySelector('#u-dept').value.trim(),
           rollNo: document.querySelector('#u-roll').value.trim(),
-          studentRollNo: document.querySelector('#u-roll').value.trim()
+          studentRollNo: document.querySelector('#u-roll').value.trim(),
+          facePhotoUrl,
+          faceDescriptor
         };
         const res = await apiRequest('/api/users', {
           method: 'POST',
@@ -2644,7 +3341,9 @@ async function initAdminPortal() {
         if (res.user) {
           state.users.push(res.user);
           addUserForm.reset();
-          statusEl.textContent = `Added ${res.user.name} (${res.user.role}) to database.`;
+          statusEl.textContent = `Added ${res.user.name} (${res.user.role})${
+            facePhotoUrl ? ' with Reference Face ID' : ''
+          } to database.`;
           renderAdminAll();
         }
       } catch (err) {

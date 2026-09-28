@@ -766,6 +766,72 @@ input:focus, select:focus {
   display: block;
 }
 
+/* ---- Student Reference Face ID Card & Avatars ------------------------- */
+.face-id-card {
+  border: 1px solid rgba(79, 70, 229, 0.22);
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.05) 0%, rgba(16, 185, 129, 0.04) 100%);
+  padding: 14px;
+}
+
+.face-id-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.face-avatar-box {
+  width: 68px;
+  height: 68px;
+  border-radius: 14px;
+  border: 2px solid rgba(79, 70, 229, 0.35);
+  background: #ffffff;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  flex: none;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.06);
+}
+
+.face-avatar-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.face-avatar-box img[hidden] {
+  display: none;
+}
+
+.face-avatar-placeholder {
+  font-size: 1.75rem;
+  opacity: 0.65;
+}
+
+.user-face-thumb {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  display: block;
+  background: #f1f5f9;
+}
+
+.user-face-empty {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  border: 1px dashed #cbd5e1;
+  background: #f8fafc;
+  display: grid;
+  place-items: center;
+  font-size: 1.1rem;
+  color: #94a3b8;
+}
+
 /* ---- Modern Data Tables ----------------------------------------------- */
 .table-wrap {
   overflow-x: auto;

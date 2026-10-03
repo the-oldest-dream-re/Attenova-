@@ -119,11 +119,69 @@
           <div class="small" id="cal-face-match-badge"><strong>Face Recognition Status:</strong> <span class="badge info">Waiting for live camera scan…</span></div>
         </div>
 
+        <!-- Multi-Signal Indoor Positioning (GPS + Wi-Fi BSSID + BLE Beacon) -->
+        <div class="multi-signal-card mb" id="multi-signal-box">
+          <div class="row between" style="gap:6px;align-items:center">
+            <strong style="font-size:.84rem;color:var(--foreground)">📶 Multi-Signal Indoor Positioning (Anti Mock-GPS)</strong>
+            <span class="badge ok" id="multi-signal-confidence-badge">Indoor Confidence: 96%</span>
+          </div>
+          <div class="multi-signal-grid mt-sm">
+            <div class="signal-item">
+              <span class="signal-icon">🛰️</span>
+              <div class="signal-content">
+                <div class="signal-title">Satellite GPS Geofence</div>
+                <div class="signal-sub" id="sig-gps-sub">Hardware satellites locked (±8m)</div>
+              </div>
+              <span class="badge ok sm" id="sig-gps-badge">✓ In Bounds</span>
+            </div>
+            <div class="signal-item">
+              <span class="signal-icon">📶</span>
+              <div class="signal-content">
+                <div class="signal-title">Classroom Wi-Fi BSSID</div>
+                <div class="signal-sub" id="sig-wifi-sub">BSSID: MGM-WiFi-Class-B204</div>
+              </div>
+              <span class="badge ok sm" id="sig-wifi-badge">✓ Matched</span>
+            </div>
+            <div class="signal-item">
+              <span class="signal-icon">📍</span>
+              <div class="signal-content">
+                <div class="signal-title">Indoor BLE Beacon</div>
+                <div class="signal-sub" id="sig-ble-sub">Beacon RSSI -58 dBm (~2.4m)</div>
+              </div>
+              <span class="badge ok sm" id="sig-ble-badge">✓ Proximity OK</span>
+            </div>
+          </div>
+        </div>
+
         <div class="camera" data-open-btn="#cam-open" data-capture-btn="#cam-capture" data-status="#cam-status">
           <video playsinline muted></video>
           <img class="captured-photo" id="captured-photo" hidden alt="GPS Stamped Attendance Snapshot" />
           <div class="oval" hidden></div>
           <div class="off">Camera is off — click "Open camera" to activate live GPS Map Stamp</div>
+
+          <!-- Active Liveness Detection Anti-Spoofing HUD -->
+          <div class="liveness-hud" id="liveness-hud-overlay" hidden>
+            <div class="liveness-hud-top">
+              <span class="liveness-step-badge" id="liveness-step-badge">🛡️ Liveness Check: Initializing</span>
+              <span class="liveness-score-badge" id="liveness-score-badge">Anti-Spoof: Active</span>
+            </div>
+            <div class="liveness-challenge-card" id="liveness-challenge-card">
+              <div class="liveness-prompt-text" id="liveness-prompt-text">Position face inside oval &amp; blink eyes naturally</div>
+              <div class="liveness-meter-row">
+                <div class="liveness-indicator" id="liveness-blink-indicator">
+                  <span class="indicator-icon">👁️</span>
+                  <span class="indicator-label">Blink (EAR):</span>
+                  <span class="indicator-status" id="ear-status-val">0.32</span>
+                </div>
+                <div class="liveness-indicator" id="liveness-yaw-indicator">
+                  <span class="indicator-icon">🔄</span>
+                  <span class="indicator-label">Head Yaw:</span>
+                  <span class="indicator-status" id="yaw-status-val">Center (0°)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="gps-overlay" id="gps-live-overlay" hidden>
             <div class="gps-pin-box">📍</div>
             <div>

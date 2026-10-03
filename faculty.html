@@ -81,6 +81,16 @@
             <input id="rad" type="number" placeholder="60" value="60" required />
           </div>
         </div>
+        <div class="grid grid-2">
+          <div class="field">
+            <label for="cwifi">Classroom Wi-Fi BSSID / SSID</label>
+            <input id="cwifi" placeholder="MGM-WiFi-Class-B204" value="MGM-WiFi-Class-B204" />
+          </div>
+          <div class="field">
+            <label for="cbeacon">Indoor BLE Beacon UUID</label>
+            <input id="cbeacon" placeholder="B9407F30-F5F8-466E-AFF9-25556B57FE6D:1:42" value="B9407F30-F5F8-466E-AFF9-25556B57FE6D:1:42" />
+          </div>
+        </div>
         <div class="row">
           <button class="btn" type="submit">Save class</button>
           <button class="btn secondary" id="use-gps-btn" type="button">Use my current GPS</button>
@@ -118,8 +128,14 @@
 
     <div class="panel">
       <div class="row between mb">
-        <h3>Live check-ins feed</h3>
-        <span class="muted small" id="live-count-label"></span>
+        <div>
+          <h3>Live check-ins feed</h3>
+          <span class="muted small" id="live-count-label"></span>
+        </div>
+        <div class="row" style="gap:8px">
+          <button class="btn secondary sm" id="faculty-export-erp-csv-btn" type="button">📊 Export University ERP (CSV)</button>
+          <button class="btn ghost sm" id="faculty-export-erp-json-btn" type="button">💾 Export ERP (JSON)</button>
+        </div>
       </div>
       <div class="table-wrap">
         <table>

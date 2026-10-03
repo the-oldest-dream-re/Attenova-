@@ -55,6 +55,7 @@
     <button data-target="classes" type="button">Classes &amp; Geofences</button>
     <button data-target="logs" type="button">Attendance Logs</button>
     <button data-target="oauth" type="button">Google OAuth Setup</button>
+    <button data-target="enterprise" type="button">Enterprise DB, ERP &amp; Twilio</button>
   </div>
 
   <!-- TAB 1: Users & Accounts -->
@@ -196,6 +197,146 @@
       <div class="row">
         <button class="btn" id="admin-save-google-btn" type="button">Save Client ID</button>
         <span class="small muted" id="admin-google-status"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB 5: Enterprise Database, ERP & Twilio -->
+  <section class="tabpanel" data-tab="enterprise" hidden>
+    <!-- 1. Enterprise Database & pgvector Scalability -->
+    <div class="panel mb">
+      <div class="row between">
+        <div>
+          <h3>🐘 Enterprise Database &amp; pgvector Scalability Engine</h3>
+          <p class="muted small">Dual-mode database architecture: high-speed JSON local store with seamless synchronization to PostgreSQL + pgvector for 10,000+ student vector indexing.</p>
+        </div>
+        <span class="badge ok" id="admin-db-engine-badge">PostgreSQL / pgvector Ready</span>
+      </div>
+
+      <div class="grid grid-3 mt">
+        <div class="stat-card">
+          <div class="stat-title">Active Database Engine</div>
+          <div class="stat-value small" id="admin-db-engine-name">Dual-Mode + In-Memory Vector Index</div>
+          <div class="muted small" id="admin-db-status-desc">PostgreSQL (pgvector 128-D) connected</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-title">Indexed 128-D Biometric Vectors</div>
+          <div class="stat-value" id="admin-db-vectors-count">0</div>
+          <div class="muted small">Students with enrolled facial vectors</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-title">AWS S3 Photo Storage</div>
+          <div class="stat-value small" id="admin-s3-status">Local &amp; S3 Hybrid</div>
+          <div class="muted small" id="admin-s3-bucket-name">Bucket: attenova-production-photos</div>
+        </div>
+      </div>
+
+      <div class="row mt" style="gap:10px;flex-wrap:wrap">
+        <button class="btn" id="admin-migrate-pg-btn" type="button">🔄 Sync Store to PostgreSQL + pgvector</button>
+        <button class="btn secondary" id="admin-benchmark-vector-btn" type="button">⚡ Benchmark 128-D Vector Search (10,000+ records)</button>
+        <span class="small muted" id="admin-db-action-status"></span>
+      </div>
+      <div id="admin-vector-search-results" class="mt small" style="display:none"></div>
+    </div>
+
+    <!-- 2. Automated SMS / WhatsApp Parent Notifications (Twilio) -->
+    <div class="panel mb">
+      <div class="row between">
+        <div>
+          <h3>💬 Automated Parent Notifications (Twilio SMS &amp; WhatsApp)</h3>
+          <p class="muted small">Instantly sends real-time WhatsApp and SMS notifications to parents when their child checks in or when facial/location spoofing is suspected.</p>
+        </div>
+        <span class="badge ok" id="admin-twilio-status-badge">Twilio Active</span>
+      </div>
+
+      <div class="grid grid-2 mt">
+        <div>
+          <h4 style="margin-bottom:8px">Test Live Notification Dispatch</h4>
+          <div class="field">
+            <label for="admin-test-phone">Parent Phone Number (E.164 with country code, e.g. +919876543210)</label>
+            <input id="admin-test-phone" placeholder="+919876543210" value="+919876543210" />
+          </div>
+          <div class="field">
+            <label for="admin-test-channel">Channel</label>
+            <select id="admin-test-channel">
+              <option value="whatsapp">WhatsApp (Official Twilio Sandbox / Sender)</option>
+              <option value="sms">SMS Text Message</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="admin-test-msg">Alert Message Body</label>
+            <input id="admin-test-msg" value="[Attenova Alert] Aarav Menon (CS21-014) checked in to Operating Systems at 11:04. Location: MGM College Kamothe Panvel. Liveness: Passed (Anti-Spoofing Verified)." />
+          </div>
+          <div class="row">
+            <button class="btn" id="admin-send-test-notif-btn" type="button">🚀 Dispatch Test Alert</button>
+            <span class="small muted" id="admin-test-notif-status"></span>
+          </div>
+        </div>
+
+        <div>
+          <h4 style="margin-bottom:8px">Twilio Credentials &amp; Senders</h4>
+          <div class="field">
+            <label for="admin-twilio-sid">Twilio Account SID</label>
+            <input id="admin-twilio-sid" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxx" />
+          </div>
+          <div class="field">
+            <label for="admin-twilio-token">Twilio Auth Token</label>
+            <input id="admin-twilio-token" type="password" placeholder="••••••••••••••••••••••••••••••••" />
+          </div>
+          <div class="grid grid-2" style="gap:8px">
+            <div class="field">
+              <label for="admin-twilio-phone">SMS From Number</label>
+              <input id="admin-twilio-phone" placeholder="+12025550199" />
+            </div>
+            <div class="field">
+              <label for="admin-twilio-whatsapp">WhatsApp Sender</label>
+              <input id="admin-twilio-whatsapp" placeholder="whatsapp:+14155238886" />
+            </div>
+          </div>
+          <div class="row">
+            <button class="btn secondary" id="admin-save-twilio-btn" type="button">Save Twilio Config</button>
+            <span class="small muted" id="admin-twilio-save-status"></span>
+          </div>
+        </div>
+      </div>
+
+      <h4 class="mt">Recent Notification Audit Logs</h4>
+      <div class="table-wrap mt-sm">
+        <table>
+          <thead><tr><th>Time</th><th>Channel</th><th>Recipient</th><th>Message</th><th>Status</th><th>Twilio SID</th></tr></thead>
+          <tbody id="admin-notif-logs-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 3. University ERP REST Integration & Export -->
+    <div class="panel">
+      <div class="row between">
+        <div>
+          <h3>🏛️ University ERP Integration (SAP / Ellucian Banner / PeopleSoft)</h3>
+          <p class="muted small">Direct REST API endpoints and one-click data exports compatible with higher education student information systems.</p>
+        </div>
+        <span class="badge info">REST API: Active</span>
+      </div>
+
+      <div class="grid grid-2 mt">
+        <div>
+          <h4 style="margin-bottom:8px">Export Standard Attendance for ERP</h4>
+          <p class="muted small">Exports standardized records with Student Roll No, Course Code, Liveness Verification Status, and GPS Coordinate Audit Hashes.</p>
+          <div class="row mt" style="gap:8px">
+            <button class="btn secondary" id="admin-erp-download-csv-btn" type="button">📊 Download University ERP (CSV)</button>
+            <button class="btn ghost" id="admin-erp-download-json-btn" type="button">💾 Download ERP (JSON)</button>
+          </div>
+        </div>
+
+        <div>
+          <h4 style="margin-bottom:8px">Batch Sync Students from University ERP</h4>
+          <p class="muted small">Pull enrolled student rosters, assigned roll numbers, and parent contact details directly from the campus ERP server.</p>
+          <div class="row mt" style="gap:8px">
+            <button class="btn" id="admin-erp-sync-students-btn" type="button">🔄 Sync Student Roster from ERP</button>
+            <span class="small muted" id="admin-erp-sync-status"></span>
+          </div>
+        </div>
       </div>
     </div>
   </section>

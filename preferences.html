@@ -36,7 +36,7 @@
 
   <form class="panel mt" id="pref-form">
     <div class="switch-row">
-      <div><strong>Successful check-in</strong><div class="muted small">Face and location both verified.</div></div>
+      <div><strong>Successful check-in</strong><div class="muted small">Face, liveness, and location all verified.</div></div>
       <label class="switch"><input id="pref-ok" type="checkbox" checked /><span></span></label>
     </div>
     <div class="switch-row">
@@ -48,9 +48,26 @@
       <label class="switch"><input id="pref-outside" type="checkbox" checked /><span></span></label>
     </div>
     <div class="switch-row">
-      <div><strong>Face not matched</strong><div class="muted small">The face scan did not match the enrolled student.</div></div>
-      <label class="switch"><input id="pref-face" type="checkbox" /><span></span></label>
+      <div><strong>Face or Liveness not matched</strong><div class="muted small">The face scan or anti-spoofing challenge failed.</div></div>
+      <label class="switch"><input id="pref-face" type="checkbox" checked /><span></span></label>
     </div>
+
+    <hr style="border:0;border-top:1px solid var(--border);margin:16px 0" />
+
+    <div class="switch-row">
+      <div><strong>📲 WhatsApp Notifications (Twilio)</strong><div class="muted small">Get immediate attendance alerts via WhatsApp message.</div></div>
+      <label class="switch"><input id="pref-whatsapp" type="checkbox" checked /><span></span></label>
+    </div>
+    <div class="switch-row">
+      <div><strong>💬 SMS Text Alerts (Twilio)</strong><div class="muted small">Receive automated SMS messages for critical attendance events.</div></div>
+      <label class="switch"><input id="pref-sms" type="checkbox" checked /><span></span></label>
+    </div>
+
+    <div class="field mt" style="max-width:360px">
+      <label for="pref-phone">Parent Phone Number for WhatsApp / SMS (e.g. +919876543210)</label>
+      <input id="pref-phone" placeholder="+919876543210" value="+919876543210" />
+    </div>
+
     <div class="row mt">
       <button class="btn" type="submit">Save settings</button>
       <a class="btn ghost" href="parent.html">Back to overview</a>

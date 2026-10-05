@@ -13,7 +13,8 @@
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
 <link rel="apple-touch-icon" href="icons/icon.svg" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&family=Sora:wght@600;700&family=Manrope:wght@400;500;600;700&display=swap" />
 <link rel="stylesheet" href="css/styles.css" />
 <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.js"></script>
 </head>
@@ -108,36 +109,46 @@
           </div>
         </div>
 
-        <div class="google-fallback-bar mb" id="gps-calibration-box" style="flex-direction:column;align-items:flex-start;gap:6px">
-          <div class="row between" style="width:100%">
-            <strong style="color:var(--foreground);font-size:.82rem">📡 Live Biometric &amp; GPS Geofence Check</strong>
-            <button class="btn secondary sm" id="calibrate-gps-btn" type="button">Calibrate My GPS</button>
+        <!-- Unified Telemetry Hub: Live Biometrics & Indoor Positioning -->
+        <div class="telemetry-hub-card mb" id="multi-signal-box">
+          <div class="telemetry-header">
+            <div class="row" style="gap:8px;align-items:center">
+              <span class="telemetry-pulse-dot"></span>
+              <strong style="font-size:.85rem;color:var(--foreground)">📡 Live Biometrics &amp; Indoor Telemetry</strong>
+            </div>
+            <div class="row" style="gap:6px">
+              <span class="badge ok sm" id="multi-signal-confidence-badge">Indoor Confidence: 96%</span>
+              <button class="btn secondary sm" id="calibrate-gps-btn" type="button" style="padding:4px 10px;font-size:.74rem">🎯 Calibrate GPS</button>
+            </div>
           </div>
-          <div class="small" id="cal-student-loc"><strong>Your Actual Location:</strong> Click "Calibrate My GPS" or "Open camera" to lock onto your live GPS…</div>
-          <div class="small" id="cal-class-loc"><strong>Classroom Target:</strong> MGM College of Engineering and Technology, Kamothe, Panvel (19.0176° N, 73.0860° E · Radius 60 m)</div>
-          <div class="small" id="cal-distance-badge"><strong>Geofence Status:</strong> Waiting for GPS lock…</div>
-          <div class="small" id="cal-face-match-badge"><strong>Face Recognition Status:</strong> <span class="badge info">Waiting for live camera scan…</span></div>
-        </div>
 
-        <!-- Multi-Signal Indoor Positioning (GPS + Wi-Fi BSSID + BLE Beacon) -->
-        <div class="multi-signal-card mb" id="multi-signal-box">
-          <div class="row between" style="gap:6px;align-items:center">
-            <strong style="font-size:.84rem;color:var(--foreground)">📶 Multi-Signal Indoor Positioning (Anti Mock-GPS)</strong>
-            <span class="badge ok" id="multi-signal-confidence-badge">Indoor Confidence: 96%</span>
+          <div id="gps-calibration-box" class="telemetry-gps-summary">
+            <div class="telemetry-row">
+              <span class="telemetry-row-icon">📍</span>
+              <div class="telemetry-row-body">
+                <div class="small" id="cal-student-loc"><strong>Your Location:</strong> Click "Calibrate GPS" to lock onto hardware satellites…</div>
+                <div class="small muted" id="cal-class-loc" style="margin-top:2px"><strong>Target:</strong> MGM College of Engineering and Technology, Kamothe, Panvel (Radius 60m)</div>
+              </div>
+            </div>
+            <div class="telemetry-badges-row">
+              <div id="cal-distance-badge"><span class="badge warn sm">Waiting for GPS lock…</span></div>
+              <div id="cal-face-match-badge"><span class="badge info sm">Face Ready</span></div>
+            </div>
           </div>
-          <div class="multi-signal-grid mt-sm">
+
+          <div class="multi-signal-grid">
             <div class="signal-item">
               <span class="signal-icon">🛰️</span>
               <div class="signal-content">
-                <div class="signal-title">Satellite GPS Geofence</div>
-                <div class="signal-sub" id="sig-gps-sub">Hardware satellites locked (±8m)</div>
+                <div class="signal-title">GPS Satellites</div>
+                <div class="signal-sub" id="sig-gps-sub">Satellites locked (±8m)</div>
               </div>
               <span class="badge ok sm" id="sig-gps-badge">✓ In Bounds</span>
             </div>
             <div class="signal-item">
               <span class="signal-icon">📶</span>
               <div class="signal-content">
-                <div class="signal-title">Classroom Wi-Fi BSSID</div>
+                <div class="signal-title">Classroom Wi-Fi</div>
                 <div class="signal-sub" id="sig-wifi-sub">BSSID: MGM-WiFi-Class-B204</div>
               </div>
               <span class="badge ok sm" id="sig-wifi-badge">✓ Matched</span>
@@ -146,7 +157,7 @@
               <span class="signal-icon">📍</span>
               <div class="signal-content">
                 <div class="signal-title">Indoor BLE Beacon</div>
-                <div class="signal-sub" id="sig-ble-sub">Beacon RSSI -58 dBm (~2.4m)</div>
+                <div class="signal-sub" id="sig-ble-sub">RSSI -58 dBm (~2.4m)</div>
               </div>
               <span class="badge ok sm" id="sig-ble-badge">✓ Proximity OK</span>
             </div>

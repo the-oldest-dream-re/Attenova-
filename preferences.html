@@ -16,6 +16,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&family=Sora:wght@600;700&family=Manrope:wght@400;500;600;700&display=swap" />
 <link rel="stylesheet" href="css/styles.css" />
+<script>(function(){try{var s=localStorage.getItem('attenova-theme'),d=window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.setAttribute('data-theme',s||(d?'dark':'light'))}catch(e){}})()</script>
 </head>
 <body data-page="preferences">
 <header class="app">
@@ -26,6 +27,7 @@
     </a>
     <nav id="app-nav">
       <a href="parent.html">Parent</a>
+      <button class="btn-theme-toggle" id="theme-toggle-btn" type="button" aria-label="Toggle theme" title="Toggle dark/light mode"><span class="theme-icon-light">☀️</span><span class="theme-icon-dark">🌙</span></button>
       <button class="btn-header install-btn" id="pwa-install-btn" type="button" hidden>Install App</button>
     </nav>
   </div>

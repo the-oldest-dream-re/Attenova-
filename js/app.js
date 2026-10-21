@@ -2,6 +2,71 @@
    Includes GPS Map Camera Stamp (exact coordinates + reverse-geocoded place name
    burnt onto the bottom of attendance photos), Real Google Sign-In, and Render.com API. */
 
+// ---- Toast Notification System ----------------------------------------
+function showToast(message, type = 'info', duration = 3500) {
+  let container = document.querySelector('#attenova-toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'attenova-toast-container';
+    container.className = 'toast-container';
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  const icon = type === 'success' ? '✓' : type === 'error' ? '✕' : type === 'warning' ? '⚠️' : 'ℹ️';
+  toast.innerHTML = `
+    <span class="toast-icon">${icon}</span>
+    <span class="toast-msg">${message}</span>
+    <button type="button" class="toast-close" aria-label="Close">&times;</button>
+  `;
+  container.appendChild(toast);
+
+  let timer = null;
+  const removeToast = () => {
+    if (timer) clearTimeout(timer);
+    toast.classList.add('toast-fade-out');
+    setTimeout(() => {
+      if (toast.parentElement) toast.remove();
+    }, 250);
+  };
+
+  const closeBtn = toast.querySelector('.toast-close');
+  if (closeBtn) closeBtn.addEventListener('click', removeToast);
+  timer = setTimeout(removeToast, duration);
+}
+window.showToast = showToast;
+
+// ---- Theme Engine (Dark / Light SaaS Switcher) ------------------------
+function initThemeEngine() {
+  const saved = localStorage.getItem('attenova-theme');
+  const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const activeTheme = saved || (prefersDark ? 'dark' : 'light');
+  document.documentElement.setAttribute('data-theme', activeTheme);
+
+  document.querySelectorAll('#theme-toggle-btn').forEach((btn) => {
+    btn.removeEventListener('click', toggleTheme);
+    btn.addEventListener('click', toggleTheme);
+  });
+}
+
+function toggleTheme() {
+  const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+  const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', newTheme);
+  localStorage.setItem('attenova-theme', newTheme);
+  if (window.showToast) {
+    showToast(`Switched to ${newTheme === 'dark' ? 'Obsidian Dark' : 'Airy Light'} mode`, 'info', 1800);
+  }
+}
+window.toggleTheme = toggleTheme;
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initThemeEngine);
+} else {
+  initThemeEngine();
+}
+
 const STORAGE_KEYS = {
   TOKEN: 'attendly_jwt_token',
   USER: 'attendly_current_user',
@@ -1963,6 +2028,16 @@ function renderAuthenticatedHeader(user) {
     nav.appendChild(installBtn);
   }
 
+  const themeToggleBtn = document.createElement('button');
+  themeToggleBtn.type = 'button';
+  themeToggleBtn.className = 'btn-theme-toggle';
+  themeToggleBtn.id = 'theme-toggle-btn';
+  themeToggleBtn.setAttribute('aria-label', 'Toggle theme');
+  themeToggleBtn.setAttribute('title', 'Toggle dark/light mode');
+  themeToggleBtn.innerHTML = '<span class="theme-icon-light">☀️</span><span class="theme-icon-dark">🌙</span>';
+  themeToggleBtn.addEventListener('click', toggleTheme);
+  nav.appendChild(themeToggleBtn);
+
   const signOutBtn = document.createElement('button');
   signOutBtn.type = 'button';
   signOutBtn.className = 'btn-header';
@@ -2306,6 +2381,12 @@ async function initStudentDashboard() {
       } else {
         statEligibilityEl.innerHTML = `<span class="badge bad">⚠️ Below 75% Requirement (${pct}%)</span>`;
       }
+    }
+
+    const statProgressBar = document.querySelector('#stat-progress-bar');
+    if (statProgressBar) {
+      statProgressBar.style.width = `${Math.min(pct, 100)}%`;
+      statProgressBar.className = `attendance-progress-bar ${pct >= 75 ? 'ok' : pct >= 60 ? 'warn' : 'bad'}`;
     }
 
     // 1. Recent Check-ins Table on Submit Tab
@@ -2923,6 +3004,8 @@ async function initStudentDashboard() {
         await video.play();
         off.hidden = true;
         oval.hidden = false;
+        const scanLine = document.querySelector('#cam-scan-line');
+        if (scanLine) scanLine.hidden = false;
         if (gpsOverlay) gpsOverlay.hidden = false;
         openBtn.disabled = true;
         captureBtn.disabled = false;
@@ -3031,6 +3114,8 @@ async function initStudentDashboard() {
       if (stream) stream.getTracks().forEach((t) => t.stop());
       stream = null;
       oval.hidden = true;
+      const scanLine = document.querySelector('#cam-scan-line');
+      if (scanLine) scanLine.hidden = true;
       if (gpsOverlay) gpsOverlay.hidden = true;
       openBtn.disabled = false;
       openBtn.textContent = '📷 Retake / Open camera';
@@ -3042,6 +3127,9 @@ async function initStudentDashboard() {
         status.innerHTML = `<span class="badge bad">Reference Photo Required</span> Please upload your <strong>Student Reference Face Photo</strong> (or tap <strong>"📸 Save from Camera"</strong>) in the box above so the system can scan and match your face.`;
         if (calFaceMatchBadgeEl) {
           calFaceMatchBadgeEl.innerHTML = `<strong>Face Recognition Status:</strong> <span class="badge bad">✕ No Reference Photo Uploaded — Upload above first</span>`;
+        }
+        if (window.showToast) {
+          showToast('Please upload reference face photo first', 'warning');
         }
         return;
       }
@@ -3158,8 +3246,14 @@ async function initStudentDashboard() {
         status.innerHTML = `<span class="badge ${rec.badgeType}">${rec.status}</span> · Face: <strong>${faceResult.score}%</strong> · Anti-Spoof Liveness: <strong>${finalLivenessOk ? 'Passed (98.6%)' : 'Failed'}</strong> · Indoor Signal: <strong>${multiSignal.indoorConfidence}%</strong> · GPS: <strong>${rec.distance}</strong> · 📍 <strong>${rec.locationName}</strong>`;
         allAttendance.unshift(rec);
         renderStudentAttendance(allAttendance);
+        if (window.showToast) {
+          showToast(`Attendance ${rec.status} (${faceResult.score}% face match, ${rec.distance})`, rec.badgeType === 'bad' ? 'error' : 'success');
+        }
       } catch (err) {
         status.textContent = 'Check-in failed: ' + err.message;
+        if (window.showToast) {
+          showToast('Check-in failed: ' + err.message, 'error');
+        }
       }
     }
 
@@ -3470,7 +3564,7 @@ async function initFacultyDashboard() {
         } catch (err) {
           btn.disabled = false;
           btn.textContent = 'Delete';
-          alert(err.message || 'Could not delete attendance record.');
+          showToast(err.message || 'Could not delete attendance record.', 'error');
         }
       });
     });
@@ -3773,6 +3867,12 @@ async function initParentDashboard() {
       } else {
         eligEl.innerHTML = `<span class="badge bad">⚠️ Attendance Shortage (${pct}%)</span>`;
       }
+    }
+
+    const parentProgressBar = document.querySelector('#parent-stat-progress-bar');
+    if (parentProgressBar) {
+      parentProgressBar.style.width = `${Math.min(pct, 100)}%`;
+      parentProgressBar.className = `attendance-progress-bar ${pct >= 75 ? 'ok' : pct >= 60 ? 'warn' : 'bad'}`;
     }
 
     // Render Alerts for Linked Student
@@ -4165,7 +4265,7 @@ async function initAdminPortal() {
             }
             renderAdminAll();
           } catch (err) {
-            alert(err.message || 'Could not link parent to student.');
+            showToast(err.message || 'Could not link parent to student.', 'error');
           }
         });
       });
@@ -4184,8 +4284,9 @@ async function initAdminPortal() {
             await apiRequest(`/api/users/${id}`, { method: 'DELETE' });
             state.users = state.users.filter((u) => u.id !== id);
             renderAdminAll();
+            showToast('User removed from database', 'info');
           } catch (err) {
-            alert(err.message);
+            showToast(err.message, 'error');
           }
         });
       });
@@ -4530,7 +4631,7 @@ async function initAdminPortal() {
             </div>`;
         }
       } catch (err) {
-        alert('Vector benchmark error: ' + err.message);
+        showToast('Vector benchmark error: ' + err.message, 'error');
       } finally {
         benchmarkVectorBtn.disabled = false;
         benchmarkVectorBtn.textContent = '⚡ Benchmark 128-D Vector Search (10,000+ records)';

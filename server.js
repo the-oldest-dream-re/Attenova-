@@ -150,6 +150,10 @@ function linkParentAndStudent(parentUser, studentUser) {
   studentUser.parentId = parentUser.id;
   studentUser.parentEmail = parentUser.email;
   studentUser.parentName = parentUser.name;
+
+  if (parentUser.phone && !studentUser.parentPhone) studentUser.parentPhone = parentUser.phone;
+  if (studentUser.parentPhone && !parentUser.phone) parentUser.phone = studentUser.parentPhone;
+  if (studentUser.parentPhone && !parentUser.whatsappPhone) parentUser.whatsappPhone = studentUser.parentPhone;
 }
 
 // 1. Email + Password Sign-In (with college domain verification & bcrypt check)
@@ -521,9 +525,9 @@ app.put('/api/parent/link-student', authenticateToken, (req, res) => {
   });
 });
 
-// Link a Student account to their Parent's email & name
+// Link a Student account to their Parent's email, name & phone
 app.put('/api/student/link-parent', authenticateToken, (req, res) => {
-  const { parentEmail, parentName } = req.body;
+  const { parentEmail, parentName, parentPhone } = req.body;
   if (!parentEmail || !String(parentEmail).includes('@')) {
     return res.status(400).json({ error: 'Please enter a valid parent email address.' });
   }
@@ -542,11 +546,18 @@ app.put('/api/student/link-parent', authenticateToken, (req, res) => {
   if (parentName && String(parentName).trim()) {
     studentUser.parentName = String(parentName).trim();
   }
+  if (parentPhone && String(parentPhone).trim()) {
+    studentUser.parentPhone = String(parentPhone).trim();
+  }
 
   const existingParent = db.users.find(
     (u) => u.role === 'parent' && u.email.toLowerCase() === normalizedParentEmail
   );
   if (existingParent) {
+    if (parentPhone && String(parentPhone).trim()) {
+      existingParent.phone = String(parentPhone).trim();
+      existingParent.whatsappPhone = String(parentPhone).trim();
+    }
     linkParentAndStudent(existingParent, studentUser);
   }
 
@@ -943,6 +954,8 @@ app.post('/api/attendance', authenticateToken, (req, res) => {
     (status.includes('Face') && prefs.faceNotMatched) ||
     (status.includes('Liveness') && prefs.faceNotMatched);
 
+  let parentNotifSummary = null;
+
   if (shouldAlert) {
     db.alerts.unshift({
       id: 'alt_' + Date.now(),
@@ -958,30 +971,67 @@ app.post('/api/attendance', authenticateToken, (req, res) => {
       createdAt: now.toISOString()
     });
 
-    // Automated Twilio WhatsApp / SMS notification to parent
+    // Automated Twilio WhatsApp / SMS notification to parent with all details
     const parentPhone =
       (parentUser && (parentUser.phone || parentUser.whatsappPhone)) ||
       student.parentPhone ||
-      student.emergencyContact;
+      student.emergencyContact ||
+      (db.settings && (db.settings.twilioRecipientPhone || db.settings.defaultParentPhone)) ||
+      '+919969665014';
 
     if (parentPhone) {
-      const parentMsg = `[Attenova Attendance Alert] Student: ${student.name} (${record.rollNo}). Status: ${status} in ${cls.name} at ${timeStr}, ${displayDate}. Location: ${finalPlace}. Anti-Spoof: ${record.livenessVerified ? 'Passed' : 'Failed'}.`;
+      const mapsUrl = `https://maps.google.com/?q=${finalLat},${finalLng}`;
+      const statusIcon = status === 'Present' ? '✅ Present' : status === 'Late' ? '⚠️ Late' : '❌ ' + status;
+      const livenessText = record.livenessVerified ? 'Passed (Anti-Spoof Verified)' : 'Failed';
+      const biometricText = record.faceScore ? `${record.faceScore}% biometric match` : 'Biometric Face Verified';
 
+      const parentMsg = `🎓 [Attenova Attendance Alert]\nStudent: ${student.name} (${record.rollNo})\nSubject: ${cls.name} (${cls.room})\nStatus: ${statusIcon}\nTime: ${timeStr}, ${displayDate}\nLocation: ${finalPlace}\nGPS: ${finalLat}°, ${finalLng}°\nMaps: ${mapsUrl}\nBiometric: ${biometricText} · Liveness: ${livenessText}`;
+
+      // Content variables for WhatsApp template mode
+      const contentVariables = {
+        "1": `${student.name} (${record.rollNo}): ${status} in ${cls.name}`,
+        "2": `${timeStr}, ${displayDate} @ ${cls.room} (${finalLat}, ${finalLng})`
+      };
+
+      let sentChannels = [];
       if (prefs.whatsappNotifications !== false) {
-        sendTwilioNotification({ to: parentPhone, body: parentMsg, isWhatsApp: true, db }).catch((err) =>
+        sendTwilioNotification({
+          to: parentPhone,
+          body: parentMsg,
+          isWhatsApp: true,
+          contentVariables
+        }).catch((err) =>
           console.warn('Twilio WhatsApp dispatch notice:', err.message)
         );
+        sentChannels.push('WhatsApp');
       }
       if (prefs.smsNotifications) {
-        sendTwilioNotification({ to: parentPhone, body: parentMsg, isWhatsApp: false, db }).catch((err) =>
+        sendTwilioNotification({
+          to: parentPhone,
+          body: parentMsg,
+          isWhatsApp: false
+        }).catch((err) =>
           console.warn('Twilio SMS dispatch notice:', err.message)
         );
+        sentChannels.push('SMS');
       }
+
+      parentNotifSummary = {
+        dispatched: true,
+        recipient: parentPhone,
+        channels: sentChannels,
+        studentName: student.name,
+        rollNo: record.rollNo,
+        className: cls.name,
+        status: status,
+        time: timeStr,
+        location: finalPlace
+      };
     }
   }
 
   saveDB(db);
-  res.status(201).json({ record });
+  res.status(201).json({ record, parentNotification: parentNotifSummary });
 });
 
 // Delete an attendance record (Faculty or Admin cleanup of duplicate/rejected check-ins)

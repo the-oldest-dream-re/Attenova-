@@ -37,7 +37,9 @@ function createSeedData() {
         department: 'Computer Science',
         semester: 'Semester 5',
         faceEnrolled: true,
+        parentName: 'Rajesh Menon',
         parentEmail: 'parent@college.edu',
+        parentPhone: '+919969665014',
         createdAt: '2026-08-01T08:00:00.000Z'
       },
       {
@@ -85,13 +87,19 @@ function createSeedData() {
         email: 'parent@college.edu',
         passwordHash: defaultPasswordHash,
         role: 'parent',
+        studentId: 'usr_student_1',
         studentRollNo: 'CS21-014',
         studentName: 'Aarav Menon',
+        studentEmail: 'student@college.edu',
+        phone: '+919969665014',
+        whatsappPhone: '+919969665014',
         preferences: {
           successfulCheckIn: true,
           lateCheckIn: true,
           wrongLocation: true,
-          faceNotMatched: false
+          faceNotMatched: true,
+          whatsappNotifications: true,
+          smsNotifications: true
         },
         createdAt: '2026-08-01T08:00:00.000Z'
       }
@@ -305,7 +313,11 @@ function createSeedData() {
         unread: false,
         createdAt: '2026-09-01T09:05:00.000Z'
       }
-    ]
+    ],
+    settings: {
+      defaultParentPhone: '+919969665014',
+      twilioRecipientPhone: '+919969665014'
+    }
   };
 }
 

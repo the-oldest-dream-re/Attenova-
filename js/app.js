@@ -4548,6 +4548,10 @@ async function initAdminPortal() {
       }
       if (phoneInput && !phoneInput.value) phoneInput.value = notifConfig.fromPhoneNumber;
       if (whatsappInput && !whatsappInput.value) whatsappInput.value = notifConfig.whatsappFromNumber;
+      const contentSidInput = document.querySelector('#admin-twilio-content-sid');
+      if (contentSidInput && !contentSidInput.value && notifConfig.contentSid) {
+        contentSidInput.value = notifConfig.contentSid;
+      }
 
       if (logsTbody) {
         const logs = notifConfig.recentLogs || [];
@@ -4647,9 +4651,10 @@ async function initAdminPortal() {
       const authToken = document.querySelector('#admin-twilio-token').value.trim();
       const phoneNumber = document.querySelector('#admin-twilio-phone').value.trim();
       const whatsappNumber = document.querySelector('#admin-twilio-whatsapp').value.trim();
+      const contentSid = (document.querySelector('#admin-twilio-content-sid')?.value || '').trim();
       await apiRequest('/api/admin/notifications/config', {
         method: 'POST',
-        body: JSON.stringify({ accountSid, authToken, phoneNumber, whatsappNumber })
+        body: JSON.stringify({ accountSid, authToken, phoneNumber, whatsappNumber, contentSid })
       });
       document.querySelector('#admin-twilio-save-status').textContent = 'Twilio config updated.';
       renderEnterpriseTab();
@@ -4663,6 +4668,7 @@ async function initAdminPortal() {
       const to = document.querySelector('#admin-test-phone').value.trim();
       const channel = document.querySelector('#admin-test-channel').value;
       const body = document.querySelector('#admin-test-msg').value.trim();
+      const contentSid = (document.querySelector('#admin-twilio-content-sid')?.value || '').trim();
       const statusEl = document.querySelector('#admin-test-notif-status');
 
       sendTestNotifBtn.disabled = true;
@@ -4670,7 +4676,7 @@ async function initAdminPortal() {
       try {
         const res = await apiRequest('/api/admin/notifications/test', {
           method: 'POST',
-          body: JSON.stringify({ to, body, isWhatsApp: channel === 'whatsapp' })
+          body: JSON.stringify({ to, body, isWhatsApp: channel === 'whatsapp', contentSid })
         });
         statusEl.textContent = `Dispatched ${channel.toUpperCase()} alert (SID: ${res.sid || 'mock'}).`;
         renderEnterpriseTab();

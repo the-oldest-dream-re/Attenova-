@@ -652,14 +652,14 @@ app.delete('/api/classes/:id', authenticateToken, (req, res) => {
 });
 
 // ---- Twilio SMS & WhatsApp Parent Notification Dispatcher ----
-async function sendTwilioNotification({ to, body, isWhatsApp = false }) {
+async function sendTwilioNotification({ to, body, isWhatsApp = false, contentSid = null, contentVariables = null }) {
   if (!to) return { ok: false, reason: 'Recipient phone number is required' };
   const db = loadDB();
   const settings = db.settings || {};
   const accountSid = process.env.TWILIO_ACCOUNT_SID || settings.twilioAccountSid;
   const authToken = process.env.TWILIO_AUTH_TOKEN || settings.twilioAuthToken;
   const fromNumber = isWhatsApp
-    ? (process.env.TWILIO_WHATSAPP_NUMBER || settings.twilioWhatsAppNumber || 'whatsapp:+14155238886')
+    ? (process.env.TWILIO_WHATSAPP_NUMBER || settings.twilioWhatsAppNumber || '+17372508034')
     : (process.env.TWILIO_PHONE_NUMBER || settings.twilioPhoneNumber || '+15005550006');
 
   if (!accountSid || !authToken) {
@@ -685,13 +685,46 @@ async function sendTwilioNotification({ to, body, isWhatsApp = false }) {
   const formattedFrom = isWhatsApp && !fromNumber.startsWith('whatsapp:') ? `whatsapp:${fromNumber}` : fromNumber;
 
   const authHeader = 'Basic ' + Buffer.from(`${accountSid}:${authToken}`).toString('base64');
+
+  let activeContentSid = contentSid || process.env.TWILIO_CONTENT_SID || settings.twilioContentSid;
+
+  // If WhatsApp and no contentSid configured yet, auto-discover templates from Twilio Content API
+  if (isWhatsApp && !activeContentSid) {
+    try {
+      const tmplRes = await fetch('https://content.twilio.com/v1/Content?PageSize=10', {
+        headers: { 'Authorization': authHeader }
+      });
+      if (tmplRes.ok) {
+        const tmplData = await tmplRes.json();
+        if (tmplData.contents && tmplData.contents.length > 0) {
+          activeContentSid = tmplData.contents[0].sid;
+          db.settings = db.settings || {};
+          db.settings.twilioContentSid = activeContentSid;
+          saveDB(db);
+        }
+      }
+    } catch (e) {
+      console.warn('Could not auto-fetch Twilio templates:', e.message);
+    }
+  }
+
   const params = new URLSearchParams();
   params.append('To', formattedTo);
   params.append('From', formattedFrom);
-  params.append('Body', body);
+
+  if (isWhatsApp && activeContentSid) {
+    params.append('ContentSid', activeContentSid);
+    const vars = contentVariables || {
+      "1": "Aarav Menon",
+      "2": new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+    params.append('ContentVariables', typeof vars === 'string' ? vars : JSON.stringify(vars));
+  } else {
+    params.append('Body', body);
+  }
 
   try {
-    const res = await fetch(endpoint, {
+    let res = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Authorization': authHeader,
@@ -699,13 +732,57 @@ async function sendTwilioNotification({ to, body, isWhatsApp = false }) {
       },
       body: params.toString()
     });
-    const data = await res.json();
+    let data = await res.json();
+
+    // If request failed with ContentSid Required and we hadn't used a ContentSid, auto-fetch template and retry
+    if (!res.ok && isWhatsApp && (data.message || '').includes('ContentSid Required') && !activeContentSid) {
+      try {
+        const tmplRes = await fetch('https://content.twilio.com/v1/Content?PageSize=10', {
+          headers: { 'Authorization': authHeader }
+        });
+        if (tmplRes.ok) {
+          const tmplData = await tmplRes.json();
+          if (tmplData.contents && tmplData.contents.length > 0) {
+            activeContentSid = tmplData.contents[0].sid;
+            db.settings = db.settings || {};
+            db.settings.twilioContentSid = activeContentSid;
+            saveDB(db);
+
+            const retryParams = new URLSearchParams();
+            retryParams.append('To', formattedTo);
+            retryParams.append('From', formattedFrom);
+            retryParams.append('ContentSid', activeContentSid);
+            retryParams.append('ContentVariables', JSON.stringify({
+              "1": "Aarav Menon",
+              "2": new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            }));
+
+            const retryRes = await fetch(endpoint, {
+              method: 'POST',
+              headers: {
+                'Authorization': authHeader,
+                'Content-Type': 'application/x-www-form-urlencoded'
+              },
+              body: retryParams.toString()
+            });
+            const retryData = await retryRes.json();
+            if (retryRes.ok) {
+              res = retryRes;
+              data = retryData;
+            }
+          }
+        }
+      } catch (retryErr) {
+        console.warn('Auto-retry with ContentSid failed:', retryErr.message);
+      }
+    }
+
     db.notificationLogs = db.notificationLogs || [];
 
     let statusText = res.ok ? 'delivered' : 'failed: ' + (data.message || res.status);
     if (!res.ok && data.message) {
       if (data.message.includes('ContentSid Required') || data.code === 63016) {
-        statusText = 'failed: ContentSid Required (Recipient must send "join <sandbox-code>" to +1 415 523 8886 on WhatsApp)';
+        statusText = 'failed: ContentSid Required (Click "API" tab in Twilio "Try out WhatsApp" popup to copy your HX... ContentSid and paste in settings)';
       } else if (data.message.includes('Invalid template name') || data.message.includes('Trial accounts') || data.code === 21617) {
         statusText = 'failed: Trial SMS limit. Recipient must be in Twilio Verified Caller IDs & SMS From must be your real Twilio number.';
       }
@@ -716,14 +793,14 @@ async function sendTwilioNotification({ to, body, isWhatsApp = false }) {
       type: isWhatsApp ? 'WhatsApp' : 'SMS',
       to: formattedTo,
       from: formattedFrom,
-      body,
+      body: activeContentSid ? `[Template: ${activeContentSid}] ${body}` : body,
       status: statusText,
       sid: data.sid || null,
       timestamp: new Date().toISOString()
     });
     if (db.notificationLogs.length > 50) db.notificationLogs.pop();
     saveDB(db);
-    return { ok: res.ok, sid: data.sid, error: data.message };
+    return { ok: res.ok, sid: data.sid, error: data.message, contentSid: activeContentSid };
   } catch (err) {
     return { ok: false, error: err.message };
   }
@@ -1022,20 +1099,51 @@ app.post('/api/admin/db/vector-search', authenticateToken, (req, res) => {
 // =====================================================================
 
 // Notification settings and delivery audit logs
-app.get('/api/admin/notifications/config', authenticateToken, (req, res) => {
+app.get('/api/admin/notifications/config', authenticateToken, async (req, res) => {
   const db = loadDB();
   const settings = db.settings || {};
   const sid = process.env.TWILIO_ACCOUNT_SID || settings.twilioAccountSid || '';
   const maskedSid = sid ? `${sid.slice(0, 6)}...${sid.slice(-4)}` : 'Not configured (Simulated Mock Active)';
-  const hasToken = Boolean(process.env.TWILIO_AUTH_TOKEN || settings.twilioAuthToken);
+  const token = process.env.TWILIO_AUTH_TOKEN || settings.twilioAuthToken || '';
+  const hasToken = Boolean(token);
   const fromPhone = process.env.TWILIO_PHONE_NUMBER || settings.twilioPhoneNumber || '+12025550199';
-  const whatsappFrom = process.env.TWILIO_WHATSAPP_NUMBER || settings.twilioWhatsAppNumber || 'whatsapp:+14155238886';
+  const whatsappFrom = process.env.TWILIO_WHATSAPP_NUMBER || settings.twilioWhatsAppNumber || '+17372508034';
+  let contentSid = process.env.TWILIO_CONTENT_SID || settings.twilioContentSid || '';
+
+  // Auto-discover templates from Twilio Content API if credentials exist and contentSid is not set
+  let availableTemplates = [];
+  if (sid && token) {
+    try {
+      const authHeader = 'Basic ' + Buffer.from(`${sid}:${token}`).toString('base64');
+      const tmplRes = await fetch('https://content.twilio.com/v1/Content?PageSize=10', {
+        headers: { 'Authorization': authHeader }
+      });
+      if (tmplRes.ok) {
+        const tmplData = await tmplRes.json();
+        availableTemplates = (tmplData.contents || []).map(c => ({
+          sid: c.sid,
+          friendlyName: c.friendly_name
+        }));
+        if (!contentSid && availableTemplates.length > 0) {
+          contentSid = availableTemplates[0].sid;
+          db.settings = db.settings || {};
+          db.settings.twilioContentSid = contentSid;
+          saveDB(db);
+        }
+      }
+    } catch (e) {
+      console.warn('Template discovery notice:', e.message);
+    }
+  }
+
   res.json({
     ok: true,
     twilioConfigured: Boolean(sid && hasToken),
     accountSidMasked: maskedSid,
     fromPhoneNumber: fromPhone,
     whatsappFromNumber: whatsappFrom,
+    contentSid,
+    availableTemplates,
     totalLogs: (db.notificationLogs || []).length,
     recentLogs: (db.notificationLogs || []).slice(0, 30)
   });
@@ -1043,7 +1151,7 @@ app.get('/api/admin/notifications/config', authenticateToken, (req, res) => {
 
 // Update Twilio credentials dynamically
 app.post('/api/admin/notifications/config', authenticateToken, (req, res) => {
-  const { accountSid, authToken, phoneNumber, whatsappNumber } = req.body;
+  const { accountSid, authToken, phoneNumber, whatsappNumber, contentSid } = req.body;
   const db = loadDB();
   db.settings = db.settings || {};
   if (accountSid) {
@@ -1062,21 +1170,30 @@ app.post('/api/admin/notifications/config', authenticateToken, (req, res) => {
     process.env.TWILIO_WHATSAPP_NUMBER = whatsappNumber.trim();
     db.settings.twilioWhatsAppNumber = whatsappNumber.trim();
   }
+  if (contentSid !== undefined) {
+    process.env.TWILIO_CONTENT_SID = contentSid.trim();
+    db.settings.twilioContentSid = contentSid.trim();
+  }
   saveDB(db);
   res.json({ ok: true, message: 'Twilio notification credentials updated successfully' });
 });
 
 // Dispatch test SMS or WhatsApp notification
 app.post('/api/admin/notifications/test', authenticateToken, async (req, res) => {
-  const { to, body, isWhatsApp } = req.body;
+  const { to, body, isWhatsApp, contentSid, contentVariables } = req.body;
   if (!to) {
     return res.status(400).json({ error: 'Target phone number is required (e.g. +919876543210)' });
   }
-  const db = loadDB();
   const testMsg =
     body ||
     `[Attenova Verification] Test automated ${isWhatsApp ? 'WhatsApp' : 'SMS'} parent notification dispatched at ${new Date().toLocaleTimeString()}.`;
-  const result = await sendTwilioNotification({ to, body: testMsg, isWhatsApp: Boolean(isWhatsApp), db });
+  const result = await sendTwilioNotification({
+    to,
+    body: testMsg,
+    isWhatsApp: Boolean(isWhatsApp),
+    contentSid,
+    contentVariables
+  });
   res.json(result);
 });
 

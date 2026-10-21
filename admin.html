@@ -255,10 +255,11 @@
       <div class="alert warn mt-sm" style="margin-top:12px;font-size:0.875rem;line-height:1.5;">
         <span class="dot"></span>
         <div>
-          <strong>📱 Twilio Sandbox Testing Instructions:</strong>
+          <strong>📱 Twilio WhatsApp Testing Guide:</strong>
           <ul style="margin:4px 0 0 16px;padding:0;">
-            <li><strong>WhatsApp (Recommended):</strong> Meta WhatsApp Sandbox requires a 1-time opt-in. Open WhatsApp on your phone (<code>+919969665014</code>) and send <code>join &lt;your-code&gt;</code> to <strong>+1 415 523 8886</strong> (find your code under <em>Twilio Console &rarr; Messaging &rarr; Try it out &rarr; Send a WhatsApp message</em>). Once joined, click <strong>Dispatch Test Alert</strong> below.</li>
-            <li><strong>SMS:</strong> Twilio trial accounts require recipient numbers to be registered under <em>Twilio Console &rarr; Phone Numbers &rarr; Verified Caller IDs</em>, and the <em>SMS From Number</em> on the right must be your real assigned Twilio phone number.</li>
+            <li><strong>Why did it fail with "ContentSid Required"?</strong> Your WhatsApp sender (e.g. <code>+1 737 250 8034</code>) is a trial sender that requires a pre-approved Content Template. In your Twilio "Try out WhatsApp" popup, click the <strong>API</strong> tab to find your <code>ContentSid=HX...</code> and paste it into the <em>WhatsApp Content Template SID</em> field below. Attenova will also auto-detect it from your account!</li>
+            <li><strong>Direct Verification:</strong> You can also click the blue <strong>Send message</strong> button inside Twilio's "Try out WhatsApp" popup to test sending to your WhatsApp number right now.</li>
+            <li><strong>SMS:</strong> Twilio trial accounts require recipient numbers to be registered under <em>Twilio Console &rarr; Phone Numbers &rarr; Verified Caller IDs</em>, and the <em>SMS From Number</em> must be your real assigned Twilio phone number.</li>
           </ul>
         </div>
       </div>
@@ -306,6 +307,11 @@
               <label for="admin-twilio-whatsapp">WhatsApp Sender</label>
               <input id="admin-twilio-whatsapp" placeholder="whatsapp:+14155238886" />
             </div>
+          </div>
+          <div class="field">
+            <label for="admin-twilio-content-sid">WhatsApp Content Template SID (starts with HX...)</label>
+            <input id="admin-twilio-content-sid" placeholder="HXxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx (Auto-detected or from Twilio API tab)" />
+            <span class="small muted" style="font-size:0.75rem;display:block;margin-top:2px;">Twilio requires a Content Template SID for WhatsApp. In Twilio Console &rarr; Try out WhatsApp, click the <strong>API</strong> tab to copy your <code>HX...</code> SID.</span>
           </div>
           <div class="row">
             <button class="btn secondary" id="admin-save-twilio-btn" type="button">Save Twilio Config</button>

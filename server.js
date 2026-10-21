@@ -701,13 +701,23 @@ async function sendTwilioNotification({ to, body, isWhatsApp = false }) {
     });
     const data = await res.json();
     db.notificationLogs = db.notificationLogs || [];
+
+    let statusText = res.ok ? 'delivered' : 'failed: ' + (data.message || res.status);
+    if (!res.ok && data.message) {
+      if (data.message.includes('ContentSid Required') || data.code === 63016) {
+        statusText = 'failed: ContentSid Required (Recipient must send "join <sandbox-code>" to +1 415 523 8886 on WhatsApp)';
+      } else if (data.message.includes('Invalid template name') || data.message.includes('Trial accounts') || data.code === 21617) {
+        statusText = 'failed: Trial SMS limit. Recipient must be in Twilio Verified Caller IDs & SMS From must be your real Twilio number.';
+      }
+    }
+
     db.notificationLogs.unshift({
       id: 'notif_' + Date.now(),
       type: isWhatsApp ? 'WhatsApp' : 'SMS',
       to: formattedTo,
       from: formattedFrom,
       body,
-      status: res.ok ? 'delivered' : 'failed: ' + (data.message || res.status),
+      status: statusText,
       sid: data.sid || null,
       timestamp: new Date().toISOString()
     });
@@ -1014,11 +1024,12 @@ app.post('/api/admin/db/vector-search', authenticateToken, (req, res) => {
 // Notification settings and delivery audit logs
 app.get('/api/admin/notifications/config', authenticateToken, (req, res) => {
   const db = loadDB();
-  const sid = process.env.TWILIO_ACCOUNT_SID || '';
+  const settings = db.settings || {};
+  const sid = process.env.TWILIO_ACCOUNT_SID || settings.twilioAccountSid || '';
   const maskedSid = sid ? `${sid.slice(0, 6)}...${sid.slice(-4)}` : 'Not configured (Simulated Mock Active)';
-  const hasToken = Boolean(process.env.TWILIO_AUTH_TOKEN);
-  const fromPhone = process.env.TWILIO_PHONE_NUMBER || '+12025550199';
-  const whatsappFrom = process.env.TWILIO_WHATSAPP_NUMBER || 'whatsapp:+14155238886';
+  const hasToken = Boolean(process.env.TWILIO_AUTH_TOKEN || settings.twilioAuthToken);
+  const fromPhone = process.env.TWILIO_PHONE_NUMBER || settings.twilioPhoneNumber || '+12025550199';
+  const whatsappFrom = process.env.TWILIO_WHATSAPP_NUMBER || settings.twilioWhatsAppNumber || 'whatsapp:+14155238886';
   res.json({
     ok: true,
     twilioConfigured: Boolean(sid && hasToken),
@@ -1033,10 +1044,25 @@ app.get('/api/admin/notifications/config', authenticateToken, (req, res) => {
 // Update Twilio credentials dynamically
 app.post('/api/admin/notifications/config', authenticateToken, (req, res) => {
   const { accountSid, authToken, phoneNumber, whatsappNumber } = req.body;
-  if (accountSid) process.env.TWILIO_ACCOUNT_SID = accountSid.trim();
-  if (authToken) process.env.TWILIO_AUTH_TOKEN = authToken.trim();
-  if (phoneNumber) process.env.TWILIO_PHONE_NUMBER = phoneNumber.trim();
-  if (whatsappNumber) process.env.TWILIO_WHATSAPP_NUMBER = whatsappNumber.trim();
+  const db = loadDB();
+  db.settings = db.settings || {};
+  if (accountSid) {
+    process.env.TWILIO_ACCOUNT_SID = accountSid.trim();
+    db.settings.twilioAccountSid = accountSid.trim();
+  }
+  if (authToken) {
+    process.env.TWILIO_AUTH_TOKEN = authToken.trim();
+    db.settings.twilioAuthToken = authToken.trim();
+  }
+  if (phoneNumber) {
+    process.env.TWILIO_PHONE_NUMBER = phoneNumber.trim();
+    db.settings.twilioPhoneNumber = phoneNumber.trim();
+  }
+  if (whatsappNumber) {
+    process.env.TWILIO_WHATSAPP_NUMBER = whatsappNumber.trim();
+    db.settings.twilioWhatsAppNumber = whatsappNumber.trim();
+  }
+  saveDB(db);
   res.json({ ok: true, message: 'Twilio notification credentials updated successfully' });
 });
 

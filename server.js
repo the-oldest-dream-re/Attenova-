@@ -5,14 +5,7 @@ const path = require('path');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { OAuth2Client } = require('google-auth-library');
-const {
-  loadDB,
-  saveDB,
-  getDatabaseStatus,
-  initPostgresSchema,
-  syncDataToPostgres,
-  searchStudentsByVector
-} = require('./data/db');
+const { loadDB, saveDB } = require('./data/db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -1108,48 +1101,11 @@ app.put('/api/preferences', authenticateToken, (req, res) => {
 });
 
 // =====================================================================
-// 1. Enterprise Database & pgvector Scalability Endpoints
-// =====================================================================
-
-// Retrieve database engine status, pgvector status, and capacity metrics
-app.get('/api/admin/db/status', authenticateToken, async (req, res) => {
-  try {
-    const db = loadDB();
-    const status = await getDatabaseStatus(db);
-    res.json({ ok: true, ...status });
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
-// Sync local in-memory store to PostgreSQL + pgvector
-app.post('/api/admin/db/migrate-to-postgres', authenticateToken, async (req, res) => {
-  try {
-    const db = loadDB();
-    const result = await syncDataToPostgres(db);
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
-// 128-D Vector Search (pgvector or in-memory vector index across 10,000+ students)
-app.post('/api/admin/db/vector-search', authenticateToken, (req, res) => {
-  const { descriptor, limit = 5, threshold = 0.6 } = req.body;
-  if (!Array.isArray(descriptor) || descriptor.length !== 128) {
-    return res.status(400).json({ error: 'Valid 128-element Float32 vector descriptor is required' });
-  }
-  const db = loadDB();
-  const results = searchStudentsByVector(db, descriptor, limit, threshold);
-  res.json({ ok: true, count: results.length, matches: results });
-});
-
-// =====================================================================
-// 2. Automated SMS / WhatsApp Notifications (Twilio Integration)
+// Automated SMS / WhatsApp Notifications (Twilio Integration)
 // =====================================================================
 
 // Notification settings and delivery audit logs
-app.get('/api/admin/notifications/config', authenticateToken, async (req, res) => {
+app.get('/api/admin/notifications/config', authenticateToken, (req, res) => {
   const db = loadDB();
   const settings = db.settings || {};
   const sid = process.env.TWILIO_ACCOUNT_SID || settings.twilioAccountSid || '';
@@ -1158,33 +1114,7 @@ app.get('/api/admin/notifications/config', authenticateToken, async (req, res) =
   const hasToken = Boolean(token);
   const fromPhone = process.env.TWILIO_PHONE_NUMBER || settings.twilioPhoneNumber || '+12025550199';
   const whatsappFrom = process.env.TWILIO_WHATSAPP_NUMBER || settings.twilioWhatsAppNumber || '+17372508034';
-  let contentSid = process.env.TWILIO_CONTENT_SID || settings.twilioContentSid || '';
-
-  // Auto-discover templates from Twilio Content API if credentials exist and contentSid is not set
-  let availableTemplates = [];
-  if (sid && token) {
-    try {
-      const authHeader = 'Basic ' + Buffer.from(`${sid}:${token}`).toString('base64');
-      const tmplRes = await fetch('https://content.twilio.com/v1/Content?PageSize=10', {
-        headers: { 'Authorization': authHeader }
-      });
-      if (tmplRes.ok) {
-        const tmplData = await tmplRes.json();
-        availableTemplates = (tmplData.contents || []).map(c => ({
-          sid: c.sid,
-          friendlyName: c.friendly_name
-        }));
-        if (!contentSid && availableTemplates.length > 0) {
-          contentSid = availableTemplates[0].sid;
-          db.settings = db.settings || {};
-          db.settings.twilioContentSid = contentSid;
-          saveDB(db);
-        }
-      }
-    } catch (e) {
-      console.warn('Template discovery notice:', e.message);
-    }
-  }
+  const contentSid = process.env.TWILIO_CONTENT_SID || settings.twilioContentSid || '';
 
   res.json({
     ok: true,
@@ -1193,7 +1123,6 @@ app.get('/api/admin/notifications/config', authenticateToken, async (req, res) =
     fromPhoneNumber: fromPhone,
     whatsappFromNumber: whatsappFrom,
     contentSid,
-    availableTemplates,
     totalLogs: (db.notificationLogs || []).length,
     recentLogs: (db.notificationLogs || []).slice(0, 30)
   });
@@ -1245,165 +1174,6 @@ app.post('/api/admin/notifications/test', authenticateToken, async (req, res) =>
     contentVariables
   });
   res.json(result);
-});
-
-// =====================================================================
-// 3. University ERP Integration (REST / CSV / JSON Export & Webhook)
-// =====================================================================
-
-// Standard University ERP Attendance Export (Compatible with SAP, PeopleSoft, Ellucian Banner)
-app.get('/api/erp/attendance', (req, res) => {
-  const apiKey = req.headers['x-erp-api-key'] || req.query.apiKey;
-  const configuredApiKey = process.env.ERP_API_KEY || 'attenova-erp-secret-key-2026';
-
-  // Allow authorized ERP caller or JWT authenticated admin/faculty
-  const authHeader = req.headers['authorization'];
-  let isAuthorized = apiKey === configuredApiKey;
-  if (!isAuthorized && authHeader) {
-    try {
-      const token = authHeader.split(' ')[1];
-      const payload = jwt.verify(token, JWT_SECRET);
-      if (payload && (payload.role === 'admin' || payload.role === 'faculty')) isAuthorized = true;
-    } catch {}
-  }
-  if (!isAuthorized) {
-    return res.status(401).json({ error: 'Unauthorized: Valid x-erp-api-key or Admin token required.' });
-  }
-
-  const { format = 'json', date, classId } = req.query;
-  const db = loadDB();
-  let list = db.attendance || [];
-  if (date) list = list.filter((r) => r.date === date);
-  if (classId) list = list.filter((r) => r.classId === classId);
-
-  // Transform to standardized University ERP export format
-  const erpRecords = list.map((r) => {
-    const student = (db.users || []).find((u) => u.id === r.studentId || u.rollNo === r.rollNo) || {};
-    const cls = (db.classes || []).find((c) => c.id === r.classId) || {};
-    return {
-      erpInstitutionCode: 'MGM-CET-IN',
-      academicYear: '2026-2027',
-      term: 'Fall 2026',
-      courseCode: cls.room ? `CSE-${cls.name.replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase()}` : 'CSE-101',
-      courseName: r.className,
-      studentRollNo: r.rollNo,
-      studentName: r.studentName,
-      studentEmail: r.studentEmail || student.email || '',
-      parentContact: student.parentPhone || student.parentEmail || 'N/A',
-      attendanceDate: r.date,
-      checkInTime: r.time,
-      status: r.status.startsWith('Present') ? 'PRESENT' : r.status.startsWith('Late') ? 'LATE' : 'ABSENT',
-      livenessVerified: r.livenessVerified !== false,
-      livenessScore: r.livenessScore || (r.livenessVerified ? 98.4 : 0),
-      indoorSignalConfidence: r.multiSignal?.indoorConfidence || 95,
-      gpsCoordinates: `${r.lat || cls.lat || 19.0176}, ${r.lng || cls.lng || 73.0860}`,
-      auditHash: `SHA256-${Buffer.from(`${r.id}-${r.rollNo}-${r.date}-${r.time}`).toString('base64').slice(0, 16)}`
-    };
-  });
-
-  if (format.toLowerCase() === 'csv') {
-    const headers = [
-      'erpInstitutionCode',
-      'academicYear',
-      'term',
-      'courseCode',
-      'courseName',
-      'studentRollNo',
-      'studentName',
-      'studentEmail',
-      'parentContact',
-      'attendanceDate',
-      'checkInTime',
-      'status',
-      'livenessVerified',
-      'livenessScore',
-      'indoorSignalConfidence',
-      'gpsCoordinates',
-      'auditHash'
-    ];
-    const csvRows = [headers.join(',')];
-    erpRecords.forEach((item) => {
-      const row = headers.map((key) => `"${String(item[key] ?? '').replace(/"/g, '""')}"`);
-      csvRows.push(row.join(','));
-    });
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename="attenova_erp_attendance_${date || 'all'}.csv"`);
-    return res.send(csvRows.join('\n'));
-  }
-
-  res.json({
-    ok: true,
-    totalRecords: erpRecords.length,
-    exportTimestamp: new Date().toISOString(),
-    records: erpRecords
-  });
-});
-
-// Batch sync students from University ERP system
-app.post('/api/erp/sync-students', authenticateToken, (req, res) => {
-  const { students = [] } = req.body;
-  if (!Array.isArray(students) || students.length === 0) {
-    return res.status(400).json({ error: 'Array of student objects required.' });
-  }
-  const db = loadDB();
-  let createdCount = 0;
-  let updatedCount = 0;
-
-  students.forEach((s) => {
-    if (!s.email && !s.rollNo) return;
-    const existing = db.users.find(
-      (u) =>
-        (s.email && u.email && u.email.toLowerCase() === s.email.toLowerCase()) ||
-        (s.rollNo && u.rollNo && u.rollNo.toLowerCase() === s.rollNo.toLowerCase())
-    );
-    if (existing) {
-      if (s.name) existing.name = s.name;
-      if (s.department) existing.department = s.department;
-      if (s.parentEmail) existing.parentEmail = s.parentEmail;
-      if (s.parentPhone) existing.parentPhone = s.parentPhone;
-      updatedCount++;
-    } else {
-      const newStudent = {
-        id: 'usr_student_' + Date.now() + Math.random().toString(36).substr(2, 4),
-        name: s.name || `Student ${s.rollNo}`,
-        email: s.email || `${s.rollNo.toLowerCase()}@mgmcen.ac.in`,
-        role: 'student',
-        rollNo: s.rollNo || `CS21-${Math.floor(100 + Math.random() * 900)}`,
-        department: s.department || 'Computer Engineering',
-        parentEmail: s.parentEmail || '',
-        parentPhone: s.parentPhone || '',
-        faceEnrolled: false,
-        passwordHash: bcrypt.hashSync('student123', 10),
-        createdAt: new Date().toISOString()
-      };
-      db.users.push(newStudent);
-      createdCount++;
-    }
-  });
-
-  saveDB(db);
-  res.json({
-    ok: true,
-    message: `ERP Sync complete: ${createdCount} students created, ${updatedCount} updated.`,
-    createdCount,
-    updatedCount,
-    totalStudents: db.users.filter((u) => u.role === 'student').length
-  });
-});
-
-// Configure ERP integration details
-app.post('/api/erp/config', authenticateToken, (req, res) => {
-  const { erpApiKey, erpEndpointUrl, syncFrequencyHours } = req.body;
-  if (erpApiKey) process.env.ERP_API_KEY = erpApiKey.trim();
-  const db = loadDB();
-  db.erpConfig = {
-    apiKeyConfigured: Boolean(process.env.ERP_API_KEY || erpApiKey),
-    endpointUrl: erpEndpointUrl || db.erpConfig?.endpointUrl || 'https://erp.mgmcen.ac.in/api/v1/attendance',
-    syncFrequencyHours: syncFrequencyHours || 24,
-    lastExportTimestamp: new Date().toISOString()
-  };
-  saveDB(db);
-  res.json({ ok: true, config: db.erpConfig });
 });
 
 // ---- Automatic Client-to-Server State Re-Hydration (/api/sync) -------

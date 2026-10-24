@@ -17,7 +17,6 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&family=Sora:wght@600;700&family=Manrope:wght@400;500;600;700&display=swap" />
 <link rel="stylesheet" href="css/styles.css" />
 <script>(function(){try{var s=localStorage.getItem('attenova-theme'),d=window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.setAttribute('data-theme',s||(d?'dark':'light'))}catch(e){}})()</script>
-<script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.js"></script>
 </head>
 <body data-page="admin">
 <header class="app">
@@ -58,7 +57,7 @@
     <button data-target="classes" type="button">Classes &amp; Geofences</button>
     <button data-target="logs" type="button">Attendance Logs</button>
     <button data-target="oauth" type="button">Google OAuth Setup</button>
-    <button data-target="enterprise" type="button">Enterprise DB, ERP &amp; Twilio</button>
+    <button data-target="enterprise" type="button">💬 Parent Notifications (Twilio)</button>
   </div>
 
   <!-- TAB 1: Users & Accounts -->
@@ -204,45 +203,9 @@
     </div>
   </section>
 
-  <!-- TAB 5: Enterprise Database, ERP & Twilio -->
+  <!-- TAB 5: Automated Parent Notifications (Twilio SMS & WhatsApp) -->
   <section class="tabpanel" data-tab="enterprise" hidden>
-    <!-- 1. Enterprise Database & pgvector Scalability -->
-    <div class="panel mb">
-      <div class="row between">
-        <div>
-          <h3>🐘 Enterprise Database &amp; pgvector Scalability Engine</h3>
-          <p class="muted small">Dual-mode database architecture: high-speed JSON local store with seamless synchronization to PostgreSQL + pgvector for 10,000+ student vector indexing.</p>
-        </div>
-        <span class="badge ok" id="admin-db-engine-badge">PostgreSQL / pgvector Ready</span>
-      </div>
-
-      <div class="grid grid-3 mt">
-        <div class="stat-card">
-          <div class="stat-title">Active Database Engine</div>
-          <div class="stat-value small" id="admin-db-engine-name">Dual-Mode + In-Memory Vector Index</div>
-          <div class="muted small" id="admin-db-status-desc">PostgreSQL (pgvector 128-D) connected</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-title">Indexed 128-D Biometric Vectors</div>
-          <div class="stat-value" id="admin-db-vectors-count">0</div>
-          <div class="muted small">Students with enrolled facial vectors</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-title">AWS S3 Photo Storage</div>
-          <div class="stat-value small" id="admin-s3-status">Local &amp; S3 Hybrid</div>
-          <div class="muted small" id="admin-s3-bucket-name">Bucket: attenova-production-photos</div>
-        </div>
-      </div>
-
-      <div class="row mt" style="gap:10px;flex-wrap:wrap">
-        <button class="btn" id="admin-migrate-pg-btn" type="button">🔄 Sync Store to PostgreSQL + pgvector</button>
-        <button class="btn secondary" id="admin-benchmark-vector-btn" type="button">⚡ Benchmark 128-D Vector Search (10,000+ records)</button>
-        <span class="small muted" id="admin-db-action-status"></span>
-      </div>
-      <div id="admin-vector-search-results" class="mt small" style="display:none"></div>
-    </div>
-
-    <!-- 2. Automated SMS / WhatsApp Parent Notifications (Twilio) -->
+    <!-- Automated SMS / WhatsApp Parent Notifications (Twilio) -->
     <div class="panel mb">
       <div class="row between">
         <div>
@@ -326,37 +289,6 @@
           <thead><tr><th>Time</th><th>Channel</th><th>Recipient</th><th>Message</th><th>Status</th><th>Twilio SID</th></tr></thead>
           <tbody id="admin-notif-logs-tbody"></tbody>
         </table>
-      </div>
-    </div>
-
-    <!-- 3. University ERP REST Integration & Export -->
-    <div class="panel">
-      <div class="row between">
-        <div>
-          <h3>🏛️ University ERP Integration (SAP / Ellucian Banner / PeopleSoft)</h3>
-          <p class="muted small">Direct REST API endpoints and one-click data exports compatible with higher education student information systems.</p>
-        </div>
-        <span class="badge info">REST API: Active</span>
-      </div>
-
-      <div class="grid grid-2 mt">
-        <div>
-          <h4 style="margin-bottom:8px">Export Standard Attendance for ERP</h4>
-          <p class="muted small">Exports standardized records with Student Roll No, Course Code, Liveness Verification Status, and GPS Coordinate Audit Hashes.</p>
-          <div class="row mt" style="gap:8px">
-            <button class="btn secondary" id="admin-erp-download-csv-btn" type="button">📊 Download University ERP (CSV)</button>
-            <button class="btn ghost" id="admin-erp-download-json-btn" type="button">💾 Download ERP (JSON)</button>
-          </div>
-        </div>
-
-        <div>
-          <h4 style="margin-bottom:8px">Batch Sync Students from University ERP</h4>
-          <p class="muted small">Pull enrolled student rosters, assigned roll numbers, and parent contact details directly from the campus ERP server.</p>
-          <div class="row mt" style="gap:8px">
-            <button class="btn" id="admin-erp-sync-students-btn" type="button">🔄 Sync Student Roster from ERP</button>
-            <span class="small muted" id="admin-erp-sync-status"></span>
-          </div>
-        </div>
       </div>
     </div>
   </section>

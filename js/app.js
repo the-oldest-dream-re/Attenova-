@@ -587,12 +587,7 @@ async function ensureFaceModelsLoaded() {
   return faceModelsPromise;
 }
 
-// Preload face recognition models in background on pages that include face-api.js
-if (typeof window !== 'undefined') {
-  window.addEventListener('load', () => {
-    if (window.faceapi) ensureFaceModelsLoaded();
-  });
-}
+// Face recognition models load on-demand when camera is opened, avoiding 10MB+ download on page load
 
 function loadImageElement(src) {
   return new Promise((resolve, reject) => {
@@ -4132,11 +4127,14 @@ if (currentPage === 'admin') {
 }
 
 async function initAdminPortal() {
-  let state = await apiRequest('/api/data');
-  const config = await apiRequest('/api/config').catch(() => ({
-    googleClientId: '',
-    allowedDomains: ['mgmmumbai.ac.in', 'college.edu']
-  }));
+  const [stateData, config] = await Promise.all([
+    apiRequest('/api/data'),
+    apiRequest('/api/config').catch(() => ({
+      googleClientId: '',
+      allowedDomains: ['mgmmumbai.ac.in', 'college.edu']
+    }))
+  ]);
+  let state = stateData;
 
   const googleInput = document.querySelector('#admin-google-client-id');
   if (googleInput) googleInput.value = config.googleClientId || '';
@@ -4529,37 +4527,16 @@ async function initAdminPortal() {
   }
 
   // =====================================================================
-  // Enterprise Database, pgvector, Twilio & ERP Management Logic
+  // Automated Parent Notifications (Twilio Integration)
   // =====================================================================
-  async function renderEnterpriseTab() {
-    // 1. Fetch DB & pgvector status
-    try {
-      const dbStatus = await apiRequest('/api/admin/db/status');
-      const engineBadge = document.querySelector('#admin-db-engine-badge');
-      const engineName = document.querySelector('#admin-db-engine-name');
-      const statusDesc = document.querySelector('#admin-db-status-desc');
-      const vectorsCount = document.querySelector('#admin-db-vectors-count');
-      const s3Status = document.querySelector('#admin-s3-status');
-      const s3Bucket = document.querySelector('#admin-s3-bucket-name');
-
-      if (engineBadge) {
-        engineBadge.className = `badge ${dbStatus.postgresConfigured ? 'ok' : 'info'}`;
-        engineBadge.textContent = dbStatus.postgresConfigured ? 'PostgreSQL Active' : 'Dual-Mode JSON + In-Memory Index';
-      }
-      if (engineName) engineName.textContent = dbStatus.engine;
-      if (statusDesc) statusDesc.textContent = `${dbStatus.vectorSupport} · ${dbStatus.totalAttendanceRecords} records`;
-      if (vectorsCount) vectorsCount.textContent = String(dbStatus.indexedVectorsCount);
-      if (s3Status) s3Status.textContent = dbStatus.s3Configured ? 'AWS S3 Active' : 'Local + S3 Hybrid';
-      if (s3Bucket) s3Bucket.textContent = `Bucket: ${dbStatus.s3Bucket}`;
-    } catch {}
-
-    // 2. Fetch Twilio Notifications & Logs
+  async function renderTwilioNotificationsTab() {
     try {
       const notifConfig = await apiRequest('/api/admin/notifications/config');
       const twilioBadge = document.querySelector('#admin-twilio-status-badge');
       const sidInput = document.querySelector('#admin-twilio-sid');
       const phoneInput = document.querySelector('#admin-twilio-phone');
       const whatsappInput = document.querySelector('#admin-twilio-whatsapp');
+      const contentSidInput = document.querySelector('#admin-twilio-content-sid');
       const logsTbody = document.querySelector('#admin-notif-logs-tbody');
 
       if (twilioBadge) {
@@ -4571,7 +4548,6 @@ async function initAdminPortal() {
       }
       if (phoneInput && !phoneInput.value) phoneInput.value = notifConfig.fromPhoneNumber;
       if (whatsappInput && !whatsappInput.value) whatsappInput.value = notifConfig.whatsappFromNumber;
-      const contentSidInput = document.querySelector('#admin-twilio-content-sid');
       if (contentSidInput && !contentSidInput.value && notifConfig.contentSid) {
         contentSidInput.value = notifConfig.contentSid;
       }
@@ -4599,73 +4575,6 @@ async function initAdminPortal() {
     } catch {}
   }
 
-  // Bind PostgreSQL Migration button
-  const migratePgBtn = document.querySelector('#admin-migrate-pg-btn');
-  if (migratePgBtn) {
-    migratePgBtn.onclick = async () => {
-      migratePgBtn.disabled = true;
-      migratePgBtn.textContent = 'Syncing…';
-      const statusEl = document.querySelector('#admin-db-action-status');
-      try {
-        const res = await apiRequest('/api/admin/db/migrate-to-postgres', { method: 'POST' });
-        statusEl.textContent = res.message || 'Sync complete.';
-        renderEnterpriseTab();
-      } catch (err) {
-        statusEl.textContent = 'Sync notice: ' + err.message;
-      } finally {
-        migratePgBtn.disabled = false;
-        migratePgBtn.textContent = '🔄 Sync Store to PostgreSQL + pgvector';
-      }
-    };
-  }
-
-  // Bind 128-D Vector Search Benchmark button
-  const benchmarkVectorBtn = document.querySelector('#admin-benchmark-vector-btn');
-  if (benchmarkVectorBtn) {
-    benchmarkVectorBtn.onclick = async () => {
-      benchmarkVectorBtn.disabled = true;
-      benchmarkVectorBtn.textContent = 'Benchmarking…';
-      const resultsEl = document.querySelector('#admin-vector-search-results');
-      try {
-        const enrolledStudent = (state.users || []).find((u) => u.faceDescriptor && u.faceDescriptor.length === 128);
-        const queryVector = enrolledStudent
-          ? enrolledStudent.faceDescriptor
-          : Array.from({ length: 128 }, () => Number((Math.random() * 0.2).toFixed(4)));
-
-        const t0 = performance.now();
-        const res = await apiRequest('/api/admin/db/vector-search', {
-          method: 'POST',
-          body: JSON.stringify({ descriptor: queryVector, limit: 5, threshold: 0.85 })
-        });
-        const elapsed = (performance.now() - t0).toFixed(2);
-
-        if (resultsEl) {
-          resultsEl.style.display = 'block';
-          resultsEl.innerHTML = `
-            <div style="background:var(--surface-2,#f8fafc);border:1px solid var(--border);border-radius:8px;padding:10px 14px">
-              <strong>⚡ 128-D Biometric Vector Query Result (${elapsed} ms latency across ${state.users.length} enrolled student vectors):</strong>
-              <div class="mt-sm">
-                ${(res.matches || [])
-                  .map(
-                    (m) => `
-                  <div class="row between" style="padding:4px 0;border-bottom:1px solid var(--border)">
-                    <span><strong>${m.name}</strong> (${m.rollNo})</span>
-                    <span>Distance: <code>${m.distance}</code> · Match: <span class="badge ok">${m.similarityPercent}%</span></span>
-                  </div>`
-                  )
-                  .join('') || '<div class="muted small">No student vectors within 0.85 threshold</div>'}
-              </div>
-            </div>`;
-        }
-      } catch (err) {
-        showToast('Vector benchmark error: ' + err.message, 'error');
-      } finally {
-        benchmarkVectorBtn.disabled = false;
-        benchmarkVectorBtn.textContent = '⚡ Benchmark 128-D Vector Search (10,000+ records)';
-      }
-    };
-  }
-
   // Bind Save Twilio Configuration button
   const saveTwilioBtn = document.querySelector('#admin-save-twilio-btn');
   if (saveTwilioBtn) {
@@ -4680,7 +4589,7 @@ async function initAdminPortal() {
         body: JSON.stringify({ accountSid, authToken, phoneNumber, whatsappNumber, contentSid })
       });
       document.querySelector('#admin-twilio-save-status').textContent = 'Twilio config updated.';
-      renderEnterpriseTab();
+      renderTwilioNotificationsTab();
     };
   }
 
@@ -4702,7 +4611,7 @@ async function initAdminPortal() {
           body: JSON.stringify({ to, body, isWhatsApp: channel === 'whatsapp', contentSid })
         });
         statusEl.textContent = `Dispatched ${channel.toUpperCase()} alert (SID: ${res.sid || 'mock'}).`;
-        renderEnterpriseTab();
+        renderTwilioNotificationsTab();
       } catch (err) {
         statusEl.textContent = 'Notice: ' + err.message;
       } finally {
@@ -4712,58 +4621,6 @@ async function initAdminPortal() {
     };
   }
 
-  // Bind ERP Download Buttons
-  const erpCsvBtn = document.querySelector('#admin-erp-download-csv-btn');
-  if (erpCsvBtn) {
-    erpCsvBtn.onclick = () => window.open('/api/erp/attendance?format=csv', '_blank');
-  }
-  const erpJsonBtn = document.querySelector('#admin-erp-download-json-btn');
-  if (erpJsonBtn) {
-    erpJsonBtn.onclick = () => window.open('/api/erp/attendance?format=json', '_blank');
-  }
-
-  // Bind ERP Batch Sync Students button
-  const erpSyncBtn = document.querySelector('#admin-erp-sync-students-btn');
-  if (erpSyncBtn) {
-    erpSyncBtn.onclick = async () => {
-      erpSyncBtn.disabled = true;
-      erpSyncBtn.textContent = 'Syncing from ERP…';
-      const statusEl = document.querySelector('#admin-erp-sync-status');
-      try {
-        const sampleErpStudents = [
-          {
-            rollNo: 'CS21-020',
-            name: 'Pooja Verma',
-            email: 'pooja.verma@mgmmumbai.ac.in',
-            department: 'Computer Science',
-            parentEmail: 'sanjay.verma@gmail.com',
-            parentPhone: '+919820011223'
-          },
-          {
-            rollNo: 'CS21-021',
-            name: 'Nikhil Patil',
-            email: 'nikhil.patil@mgmmumbai.ac.in',
-            department: 'Computer Science',
-            parentEmail: 'ashok.patil@gmail.com',
-            parentPhone: '+919830022334'
-          }
-        ];
-        const res = await apiRequest('/api/erp/sync-students', {
-          method: 'POST',
-          body: JSON.stringify({ students: sampleErpStudents })
-        });
-        statusEl.textContent = res.message;
-        state = await apiRequest('/api/data');
-        renderAdminAll();
-      } catch (err) {
-        statusEl.textContent = 'ERP Sync error: ' + err.message;
-      } finally {
-        erpSyncBtn.disabled = false;
-        erpSyncBtn.textContent = '🔄 Sync Student Roster from ERP';
-      }
-    };
-  }
-
-  renderEnterpriseTab();
+  renderTwilioNotificationsTab();
   renderAdminAll();
 }

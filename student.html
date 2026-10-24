@@ -35,7 +35,16 @@
 </header>
 
 <main class="wrap" data-tabs>
-  <div class="row between">
+  <!-- NATIVE MOBILE APP HEADER (Matching PDF Design) -->
+  <div class="mobile-app-header">
+    <div>
+      <div class="mobile-header-date" id="mobile-current-date">October 2026</div>
+      <h1 class="mobile-header-title">Dashboard</h1>
+    </div>
+    <div class="mobile-header-avatar" id="mobile-user-avatar">YN</div>
+  </div>
+
+  <div class="row between desktop-only-header">
     <div>
       <h1 id="student-greeting">Hello, Aarav</h1>
       <p class="muted small" id="student-meta">Roll no CS21-014 · Computer Science, Semester 5</p>
@@ -43,8 +52,8 @@
     <span class="badge ok" id="student-face-badge">Face + GPS Camera Enabled</span>
   </div>
 
-  <!-- Overall Attendance Summary Cards -->
-  <div class="grid grid-4 mt">
+  <!-- Overall Attendance Summary Cards (Desktop View) -->
+  <div class="grid grid-4 mt desktop-stats-grid">
     <div class="panel">
       <div class="stat" id="stat-percent">0%</div>
       <div class="muted small">overall attendance %</div>
@@ -67,17 +76,75 @@
     </div>
   </div>
 
-  <!-- Student Dashboard Navigation Tabs -->
-  <div class="tabs mt">
+  <!-- Student Dashboard Navigation Tabs (Desktop View) -->
+  <div class="tabs mt desktop-tabs">
     <button class="active" data-target="submit" type="button">📸 Submit Attendance</button>
     <button data-target="classwise" type="button">📚 Class-Wise Attendance</button>
     <button data-target="daywise" type="button">📅 Day-Wise Attendance</button>
+    <button data-target="leave" type="button">💼 Leave &amp; Guardian</button>
   </div>
 
-  <!-- TAB 1: Submit Attendance -->
+  <!-- TAB 1: Submit Attendance / Home -->
   <section class="tabpanel" data-tab="submit">
+    <!-- MOBILE-FIRST NATIVE DASHBOARD (Matching PDF Screenshot) -->
+    <div class="mobile-dashboard-view">
+      <!-- 1. Periwinkle Lavender Hero Check-In Card -->
+      <div class="mobile-hero-card" id="mobile-hero-card">
+        <div class="mobile-hero-tag">TODAY</div>
+        <h2 class="mobile-hero-title">Ready to check in?</h2>
+        <div class="mobile-hero-schedule" id="mobile-hero-schedule">Shift 09:00 – 18:00</div>
+        <button class="mobile-hero-btn" id="mobile-checkin-cta" type="button">
+          <span class="mobile-hero-btn-icon">➔]</span> Check in
+        </button>
+      </div>
+
+      <!-- 2. Attendance Rate Circular Gauge Card -->
+      <div class="mobile-rate-card" id="mobile-rate-card">
+        <div class="mobile-rate-gauge">
+          <svg viewBox="0 0 72 72" class="rate-gauge-svg">
+            <circle class="rate-gauge-track" cx="36" cy="36" r="30" />
+            <circle class="rate-gauge-bar" id="mobile-gauge-bar" cx="36" cy="36" r="30" />
+          </svg>
+          <div class="rate-gauge-val" id="mobile-gauge-pct">94%</div>
+        </div>
+        <div class="mobile-rate-info">
+          <div class="mobile-rate-title">Attendance rate</div>
+          <div class="mobile-rate-subtitle" id="mobile-rate-fraction">15 of 16 working days</div>
+        </div>
+      </div>
+
+      <!-- 3. 4-Column Quick Stat Badges -->
+      <div class="mobile-stats-grid">
+        <div class="mobile-stat-box">
+          <div class="mobile-stat-num" id="mob-stat-present">13</div>
+          <div class="mobile-stat-pill present">Present</div>
+        </div>
+        <div class="mobile-stat-box">
+          <div class="mobile-stat-num" id="mob-stat-late">2</div>
+          <div class="mobile-stat-pill late">Late</div>
+        </div>
+        <div class="mobile-stat-box">
+          <div class="mobile-stat-num" id="mob-stat-absent">1</div>
+          <div class="mobile-stat-pill absent">Absent</div>
+        </div>
+        <div class="mobile-stat-box">
+          <div class="mobile-stat-num" id="mob-stat-leave">1</div>
+          <div class="mobile-stat-pill leave">Leave</div>
+        </div>
+      </div>
+
+      <!-- 4. Recent Activity Section -->
+      <div class="mobile-section-header">
+        <h3>Recent activity</h3>
+        <button class="mobile-see-all-btn" id="mobile-see-all-btn" type="button">See all</button>
+      </div>
+      <div class="mobile-activity-list" id="mobile-activity-list">
+        <!-- Dynamic cards matching the PDF rendered via JavaScript -->
+      </div>
+    </div>
+
     <div class="grid grid-2">
-      <div class="panel">
+      <div class="panel" id="camera-checkin-section">
         <div class="row between mb">
           <div>
             <h2 id="active-class-title">Check in to Data Structures</h2>
@@ -354,7 +421,51 @@
       </div>
     </div>
   </section>
+
+  <!-- TAB 4: Leave & Parent Guardian (Matching PDF Tab 4) -->
+  <section class="tabpanel" data-tab="leave" hidden>
+    <div class="panel mb" id="student-leave-card">
+      <div class="row between mb">
+        <div>
+          <h3>💼 Campus Leave &amp; Absence Requests</h3>
+          <p class="muted small">View approved leave requests or submit absence notices to faculty.</p>
+        </div>
+        <span class="badge ok">1 Approved Leave</span>
+      </div>
+      <div class="mobile-activity-card mb" style="background:var(--surface);">
+        <div class="mobile-activity-info">
+          <div class="mobile-activity-date">Tue 20 Oct</div>
+          <div class="mobile-activity-sub">Approved medical leave · Full day absence</div>
+        </div>
+        <span class="mobile-stat-pill leave">On leave</span>
+      </div>
+      <div class="row" style="gap:8px">
+        <button class="btn secondary sm" id="apply-leave-btn" type="button">📝 Request Official Leave</button>
+        <span class="small muted" id="apply-leave-status"></span>
+      </div>
+    </div>
+  </section>
 </main>
+
+<!-- Fixed Mobile Bottom Navigation Bar (Matching PDF) -->
+<nav class="mobile-bottom-nav" id="mobile-bottom-nav">
+  <button class="mob-nav-item active" data-mob-tab="home" type="button">
+    <span class="mob-nav-icon">⊞</span>
+    <span class="mob-nav-label">Home</span>
+  </button>
+  <button class="mob-nav-item" data-mob-tab="history" type="button">
+    <span class="mob-nav-icon">📅</span>
+    <span class="mob-nav-label">History</span>
+  </button>
+  <button class="mob-nav-item" data-mob-tab="reports" type="button">
+    <span class="mob-nav-icon">📊</span>
+    <span class="mob-nav-label">Reports</span>
+  </button>
+  <button class="mob-nav-item" data-mob-tab="leave" type="button">
+    <span class="mob-nav-icon">💼</span>
+    <span class="mob-nav-label">Leave</span>
+  </button>
+</nav>
 
 <footer class="app">Attenova · student view</footer>
 <script src="js/app.js"></script>

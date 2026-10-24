@@ -917,57 +917,6 @@ async function evaluateFrameLiveness(videoEl) {
   };
 }
 
-// =====================================================================
-// 2. Multi-Signal Indoor Positioning Engine (GPS + Wi-Fi BSSID + BLE)
-// =====================================================================
-
-// Scans indoor multi-signals: Combines satellite GPS with classroom Wi-Fi BSSID & BLE Beacon
-async function scanIndoorSignals(cls, gpsDistanceMeters) {
-  const classWifi = (cls && cls.wifiBssid) || 'MGM-WiFi-Class-B204';
-  const classBeacon = (cls && cls.bleBeaconUuid) || 'B9407F30-F5F8-466E-AFF9-25556B57FE6D:1:42';
-
-  let bleDetected = false;
-  let bleRssi = -58;
-  let bleEstimatedDist = 2.4;
-  let wifiMatched = true; // In browser context, student is on college intranet or classroom hotspot
-  let mockGpsSuspected = false;
-
-  // Web Bluetooth API check if supported and permission allows
-  if (navigator.bluetooth && typeof navigator.bluetooth.getAvailability === 'function') {
-    try {
-      const available = await navigator.bluetooth.getAvailability();
-      if (available) {
-        bleDetected = true;
-      }
-    } catch {}
-  } else {
-    // Standard beacon proximity fallback for indoor classroom beacon
-    bleDetected = true;
-  }
-
-  // Cross-reference GPS with indoor beacons to detect GPS spoofing apps
-  // If GPS claims 0.0m exact pin without satellite variance while indoor signals are missing, flag it
-  if (typeof gpsDistanceMeters === 'number' && gpsDistanceMeters <= 5 && !bleDetected && !wifiMatched) {
-    mockGpsSuspected = true;
-  }
-
-  let indoorConfidence = 96;
-  if (!wifiMatched) indoorConfidence -= 25;
-  if (!bleDetected) indoorConfidence -= 20;
-  if (mockGpsSuspected) indoorConfidence -= 40;
-
-  return {
-    wifiBssid: classWifi,
-    wifiMatched,
-    bleBeaconUuid: classBeacon,
-    bleDetected,
-    bleRssi: `${bleRssi} dBm`,
-    bleEstimatedDist: `${bleEstimatedDist} m`,
-    indoorConfidence: Math.max(30, Math.min(99, indoorConfidence)),
-    mockGpsSuspected,
-    summary: `${wifiMatched ? 'Wi-Fi BSSID Matched' : 'Wi-Fi Unverified'} · ${bleDetected ? `BLE Beacon Active (~${bleEstimatedDist}m)` : 'BLE Beacon Scanning'}`
-  };
-}
 
 function createGpsStampedImage({
   videoEl,
@@ -986,8 +935,7 @@ function createGpsStampedImage({
   faceMatched = true,
   faceScore,
   livenessVerified = true,
-  livenessScore = 98.4,
-  indoorConfidence = 96
+  livenessScore = 98.4
 }) {
   const canvas = document.createElement('canvas');
   const W = 640;
@@ -1145,7 +1093,7 @@ function createGpsStampedImage({
   })`;
   const metaLine2 = `Student: ${studentName || 'Aarav Menon'} (${rollNo || 'CS21-014'}) · Face: ${
     faceMatched ? `Verified${scoreSuffix}` : `Mismatch${scoreSuffix}`
-  } · Liveness: ${livenessVerified ? 'Passed' : 'Failed'} · Indoor: ${indoorConfidence}%`;
+  } · Liveness: ${livenessVerified ? 'Passed' : 'Failed'}`;
 
   // Line 1: Actual Calibrated Place Name
   ctx.fillStyle = '#ffffff';
@@ -3144,7 +3092,7 @@ async function initStudentDashboard() {
       }
 
       status.textContent =
-        'Verifying biometrics against reference portrait, evaluating liveness anti-spoof, and checking multi-signal indoor positioning…';
+        'Verifying biometrics against reference portrait, evaluating liveness anti-spoof, and checking location geofence…';
       captureBtn.disabled = true;
 
       if (calFaceMatchBadgeEl) {
@@ -3166,10 +3114,9 @@ async function initStudentDashboard() {
         }
       }
 
-      // 2. Refresh GPS Geofence Lock & Scan Multi-Signal Indoor Positioning
+      // 2. Refresh GPS Geofence Lock
       await refreshLiveGpsOverlay(true);
       const cls = getSelectedClass();
-      const multiSignal = await scanIndoorSignals(cls, liveGpsState.distanceMeters);
 
       // Verify Liveness: If student blinked/turned or passed fallback inspection
       let finalLivenessOk = livenessState.isVerified || (livenessState.blinkDetected && livenessState.turnDetected);
@@ -3216,8 +3163,7 @@ async function initStudentDashboard() {
         locationName: liveGpsState.locationName,
         dateTimeStr: nowStr,
         livenessVerified: finalLivenessOk,
-        livenessScore: finalLivenessScore,
-        indoorConfidence: multiSignal.indoorConfidence
+        livenessScore: finalLivenessScore
       });
 
       // Show the GPS & Face-stamped image inside the camera box
@@ -3246,8 +3192,7 @@ async function initStudentDashboard() {
             faceScore: faceResult.score,
             livenessVerified: finalLivenessOk,
             livenessScore: finalLivenessScore,
-            livenessDetails: finalLivenessDetails,
-            multiSignal
+            livenessDetails: finalLivenessDetails
           })
         });
 
@@ -3258,7 +3203,7 @@ async function initStudentDashboard() {
           const channelsStr = (notif.channels && notif.channels.length > 0) ? notif.channels.join(' & ') : 'WhatsApp';
           notifHtml = `<div class="mt-sm" style="display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--success,#10b981)"><span class="badge ok">📱 Parent Alert Sent</span> Instant ${channelsStr} notification dispatched to parent (<strong>${notif.recipient}</strong>) with location & time details.</div>`;
         }
-        status.innerHTML = `<span class="badge ${rec.badgeType}">${rec.status}</span> · Face: <strong>${faceResult.score}%</strong> · Anti-Spoof Liveness: <strong>${finalLivenessOk ? 'Passed (98.6%)' : 'Failed'}</strong> · Indoor Signal: <strong>${multiSignal.indoorConfidence}%</strong> · GPS: <strong>${rec.distance}</strong> · 📍 <strong>${rec.locationName}</strong>${notifHtml}`;
+        status.innerHTML = `<span class="badge ${rec.badgeType}">${rec.status}</span> · Face: <strong>${faceResult.score}%</strong> · Anti-Spoof Liveness: <strong>${finalLivenessOk ? 'Passed (98.6%)' : 'Failed'}</strong> · GPS: <strong>${rec.distance}</strong> · 📍 <strong>${rec.locationName}</strong>${notifHtml}`;
         allAttendance.unshift(rec);
         renderStudentAttendance(allAttendance);
         if (window.showToast) {
@@ -3643,34 +3588,18 @@ async function initFacultyDashboard() {
       const lat = document.querySelector('#lat').value.trim();
       const lng = document.querySelector('#lng').value.trim();
       const radius = document.querySelector('#rad').value.trim();
-      const wifiBssid = (document.querySelector('#cwifi')?.value || 'MGM-WiFi-Class-B204').trim();
-      const bleBeaconUuid = (document.querySelector('#cbeacon')?.value || 'B9407F30-F5F8-466E-AFF9-25556B57FE6D:1:42').trim();
 
       const res = await apiRequest('/api/classes', {
         method: 'POST',
-        body: JSON.stringify({ name, room, schedule, lat, lng, radius, wifiBssid, bleBeaconUuid })
+        body: JSON.stringify({ name, room, schedule, lat, lng, radius })
       });
       if (res.classItem) {
         state.classes.push(res.classItem);
         addClassForm.reset();
-        document.querySelector('#class-save-status').textContent = `Saved "${res.classItem.name}" with Wi-Fi & BLE Beacon to database.`;
+        document.querySelector('#class-save-status').textContent = `Saved "${res.classItem.name}" to database.`;
         renderFacultyView();
       }
     });
-  }
-
-  // University ERP Export Buttons on Faculty Feed
-  const facultyErpCsvBtn = document.querySelector('#faculty-export-erp-csv-btn');
-  if (facultyErpCsvBtn) {
-    facultyErpCsvBtn.onclick = () => {
-      window.open('/api/erp/attendance?format=csv', '_blank');
-    };
-  }
-  const facultyErpJsonBtn = document.querySelector('#faculty-export-erp-json-btn');
-  if (facultyErpJsonBtn) {
-    facultyErpJsonBtn.onclick = () => {
-      window.open('/api/erp/attendance?format=json', '_blank');
-    };
   }
 
   // Use Current GPS button

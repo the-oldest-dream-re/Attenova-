@@ -114,15 +114,14 @@
           </div>
         </div>
 
-        <!-- Unified Telemetry Hub: Live Biometrics & Indoor Positioning -->
-        <div class="telemetry-hub-card mb" id="multi-signal-box">
+        <!-- GPS & Geofence Verification Telemetry -->
+        <div class="telemetry-hub-card mb" id="gps-telemetry-box">
           <div class="telemetry-header">
             <div class="row" style="gap:8px;align-items:center">
               <span class="telemetry-pulse-dot"></span>
-              <strong style="font-size:.85rem;color:var(--foreground)">📡 Live Biometrics &amp; Indoor Telemetry</strong>
+              <strong style="font-size:.85rem;color:var(--foreground)">📍 Live GPS &amp; Geofence Verification</strong>
             </div>
-            <div class="row" style="gap:6px">
-              <span class="badge ok sm" id="multi-signal-confidence-badge">Indoor Confidence: 96%</span>
+            <div>
               <button class="btn secondary sm" id="calibrate-gps-btn" type="button" style="padding:4px 10px;font-size:.74rem">🎯 Calibrate GPS</button>
             </div>
           </div>
@@ -138,33 +137,6 @@
             <div class="telemetry-badges-row">
               <div id="cal-distance-badge"><span class="badge warn sm">Waiting for GPS lock…</span></div>
               <div id="cal-face-match-badge"><span class="badge info sm">Face Ready</span></div>
-            </div>
-          </div>
-
-          <div class="multi-signal-grid">
-            <div class="signal-item">
-              <span class="signal-icon">🛰️</span>
-              <div class="signal-content">
-                <div class="signal-title">GPS Satellites</div>
-                <div class="signal-sub" id="sig-gps-sub">Satellites locked (±8m)</div>
-              </div>
-              <span class="badge ok sm" id="sig-gps-badge">✓ In Bounds</span>
-            </div>
-            <div class="signal-item">
-              <span class="signal-icon">📶</span>
-              <div class="signal-content">
-                <div class="signal-title">Classroom Wi-Fi</div>
-                <div class="signal-sub" id="sig-wifi-sub">BSSID: MGM-WiFi-Class-B204</div>
-              </div>
-              <span class="badge ok sm" id="sig-wifi-badge">✓ Matched</span>
-            </div>
-            <div class="signal-item">
-              <span class="signal-icon">📍</span>
-              <div class="signal-content">
-                <div class="signal-title">Indoor BLE Beacon</div>
-                <div class="signal-sub" id="sig-ble-sub">RSSI -58 dBm (~2.4m)</div>
-              </div>
-              <span class="badge ok sm" id="sig-ble-badge">✓ Proximity OK</span>
             </div>
           </div>
         </div>

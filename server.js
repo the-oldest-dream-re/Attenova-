@@ -600,9 +600,9 @@ app.delete('/api/users/:id', authenticateToken, (req, res) => {
   res.json({ ok: true });
 });
 
-// Add a new class (Faculty or Admin) with optional Multi-Signal Wi-Fi BSSID and BLE Beacon UUID
+// Add a new class (Faculty or Admin)
 app.post('/api/classes', authenticateToken, (req, res) => {
-  const { name, room, schedule, lat, lng, radius, studentCount, wifiBssid, bleBeaconUuid } = req.body;
+  const { name, room, schedule, lat, lng, radius, studentCount } = req.body;
   if (!name) {
     return res.status(400).json({ error: 'Class name is required.' });
   }
@@ -620,8 +620,6 @@ app.post('/api/classes', authenticateToken, (req, res) => {
     lat: parseFloat(lat) || 19.0176,
     lng: parseFloat(lng) || 73.0860,
     radius: parseInt(radius, 10) || 60,
-    wifiBssid: (wifiBssid || '').trim() || `MGM-Campus-WiFi · ${room || 'Room B-204'}`,
-    bleBeaconUuid: (bleBeaconUuid || '').trim() || `attenova-beacon-${(room || 'b204').toLowerCase().replace(/[^a-z0-9]/g, '')}`,
     studentCount: parseInt(studentCount, 10) || 40,
     live: false,
     createdAt: new Date().toISOString()
@@ -824,8 +822,7 @@ app.post('/api/attendance', authenticateToken, (req, res) => {
     manualStatus,
     livenessVerified,
     livenessScore,
-    livenessDetails,
-    multiSignal
+    livenessDetails
   } = req.body;
   const db = loadDB();
 
@@ -910,13 +907,7 @@ app.post('/api/attendance', authenticateToken, (req, res) => {
     faceScore: typeof faceScore === 'number' ? faceScore : undefined,
     livenessVerified: livenessVerified !== undefined ? Boolean(livenessVerified) : true,
     livenessScore: typeof livenessScore === 'number' ? livenessScore : undefined,
-    livenessDetails: livenessDetails || (livenessVerified ? 'Active eye-blink & head-yaw verified' : ''),
-    multiSignal: multiSignal || {
-      gpsAccuracyMeters: 4.8,
-      indoorConfidence: 94,
-      wifiBssidMatched: Boolean(cls.wifiBssid),
-      bleBeaconDetected: Boolean(cls.bleBeaconUuid)
-    }
+    livenessDetails: livenessDetails || (livenessVerified ? 'Active eye-blink & head-yaw verified' : '')
   };
 
   db.attendance.unshift(record);

@@ -39,40 +39,36 @@
 
 <section class="hero">
   <div class="wrap">
-    <div>
-      <span class="pill">✨ Next-Gen Campus Attendance</span>
-      <h1>Attendance that proves <span class="text-gradient">who was there, and where.</span></h1>
-      <p class="lead">Students check in with a quick face scan inside the classroom. If the face or the GPS geofence doesn't match, the check-in is automatically rejected and parents are notified in real time.</p>
-      <div class="row mt">
-        <span class="badge info">🔒 Bcrypt + JWT Secured</span>
-        <span class="badge ok">📍 Precision GPS Geofence</span>
-        <span class="badge info">📱 Installable Mobile App</span>
-      </div>
-      <div class="hero-stats-row">
-        <div class="hero-stat-pill">
-          <span class="hero-stat-num">99.4%</span>
-          <span class="hero-stat-label">Anti-Spoof Liveness</span>
+    <div class="hero-content">
+      <div class="hero-badge">Campus Attendance Platform</div>
+      <h1>Smart Attendance, <br/><span class="text-gradient">Verified in the Classroom.</span></h1>
+      <p class="lead">Fast, contactless campus attendance. Students verify with a quick face scan inside their lecture hall, with real-time updates for faculty and parents.</p>
+      
+      <div class="hero-features-list">
+        <div class="hero-feature-item">
+          <span class="feature-check">✓</span>
+          <span>Instant camera face verification</span>
         </div>
-        <div class="hero-stat-pill">
-          <span class="hero-stat-num">±8m</span>
-          <span class="hero-stat-label">Satellite Precision</span>
+        <div class="hero-feature-item">
+          <span class="feature-check">✓</span>
+          <span>Classroom GPS geofence validation</span>
         </div>
-        <div class="hero-stat-pill">
-          <span class="hero-stat-num">&lt; 1.5s</span>
-          <span class="hero-stat-label">Vector Face Match</span>
+        <div class="hero-feature-item">
+          <span class="feature-check">✓</span>
+          <span>Real-time WhatsApp &amp; SMS alerts to parents</span>
         </div>
       </div>
     </div>
 
-    <div class="panel">
-      <h2>Welcome back</h2>
-      <p class="muted small">Sign in with your verified college email or Google account.</p>
+    <div class="panel login-panel">
+      <h2>Sign In</h2>
+      <p class="muted small">Access your student, faculty, parent, or admin portal.</p>
 
       <div id="login-alert" class="auth-msg error" hidden></div>
 
       <form id="login-form">
         <div class="field">
-          <label>Select your workspace</label>
+          <label>Select Workspace</label>
           <div class="role-pills">
             <input type="radio" id="role-student" name="role" value="student" checked />
             <label for="role-student">Student</label>
@@ -80,6 +76,8 @@
             <label for="role-faculty">Faculty</label>
             <input type="radio" id="role-parent" name="role" value="parent" />
             <label for="role-parent">Parent</label>
+            <input type="radio" id="role-admin" name="role" value="admin" />
+            <label for="role-admin">Admin</label>
           </div>
         </div>
 
@@ -95,28 +93,28 @@
         <div class="divider">or continue with email</div>
 
         <div class="field">
-          <label for="email" id="login-email-label">Institutional Email <span class="muted small">(@mgmmumbai.ac.in / @college.edu)</span></label>
-          <input id="email" name="email" type="email" placeholder="s25_student@mgmmumbai.ac.in" required autocomplete="username" />
+          <label for="email" id="login-email-label">Institutional Email</label>
+          <input id="email" name="email" type="email" placeholder="name@college.edu" required autocomplete="username" />
         </div>
         <div class="field" id="parent-student-link-field" hidden>
-          <label for="parent-student-identifier">Child's Roll No or Student Email <span class="muted small">(links your parent account)</span></label>
-          <input id="parent-student-identifier" name="studentIdentifier" placeholder="e.g. CS21-014 or s25_student@mgmmumbai.ac.in" />
+          <label for="parent-student-identifier">Child's Roll No or Email <span class="muted small">(to link parent account)</span></label>
+          <input id="parent-student-identifier" name="studentIdentifier" placeholder="e.g. CS21-014 or student@college.edu" />
         </div>
         <div class="field">
           <label for="password">Password</label>
           <input id="password" name="password" type="password" placeholder="••••••••" required autocomplete="current-password" />
         </div>
 
-        <button class="btn w-full" id="login-submit-btn" type="submit">Continue to Workspace &rarr;</button>
+        <button class="btn w-full btn-submit-main" id="login-submit-btn" type="submit">Sign In to Portal &rarr;</button>
       </form>
 
       <div class="demo-accounts">
-        <div class="muted small">Quick-fill demo accounts (password: <code>password123</code>):</div>
-        <div>
-          <button type="button" class="demo-chip" data-fill-email="student@college.edu" data-fill-role="student">🎓 Student</button>
-          <button type="button" class="demo-chip" data-fill-email="faculty@college.edu" data-fill-role="faculty">👩‍🏫 Faculty</button>
-          <button type="button" class="demo-chip" data-fill-email="parent@college.edu" data-fill-role="parent">👪 Parent</button>
-          <button type="button" class="demo-chip" data-fill-email="admin@college.edu" data-fill-role="admin">⚡ Admin</button>
+        <div class="demo-accounts-label">Demo accounts (password: <code>password123</code>):</div>
+        <div class="demo-chips-row">
+          <button type="button" class="demo-chip" data-fill-email="student@college.edu" data-fill-role="student">Student</button>
+          <button type="button" class="demo-chip" data-fill-email="faculty@college.edu" data-fill-role="faculty">Faculty</button>
+          <button type="button" class="demo-chip" data-fill-email="parent@college.edu" data-fill-role="parent">Parent</button>
+          <button type="button" class="demo-chip" data-fill-email="admin@college.edu" data-fill-role="admin">Admin</button>
         </div>
       </div>
     </div>
@@ -125,25 +123,20 @@
 
 <main class="wrap">
   <div class="grid grid-3">
-    <div class="panel">
+    <div class="panel feature-card">
       <div class="feature-icon">📸</div>
       <h3>Biometric Face Match</h3>
-      <p class="muted small">A live camera snapshot with an embedded GPS timestamp verifies the student in seconds before attendance is logged.</p>
+      <p class="muted small">Quick front-facing camera scan verifies identity in seconds with anti-spoofing protection.</p>
     </div>
-    <div class="panel">
+    <div class="panel feature-card">
       <div class="feature-icon">📍</div>
-      <h3>Precision Classroom Geofence</h3>
-      <p class="muted small">Every lecture room has calibrated GPS coordinates and a strict meter radius. Check-ins outside the room are blocked automatically.</p>
+      <h3>Classroom Geofencing</h3>
+      <p class="muted small">Calibrated GPS coordinates ensure students are physically inside the classroom during the lecture.</p>
     </div>
-    <div class="panel">
-      <div class="feature-icon">🛡️</div>
-      <h3>Active Liveness Anti-Spoof</h3>
-      <p class="muted small">Combines real-time Eye Aspect Ratio (EAR) blink detection and head yaw rotation challenges to block photo and video spoofing attempts.</p>
-    </div>
-    <div class="panel">
+    <div class="panel feature-card">
       <div class="feature-icon">📲</div>
-      <h3>Twilio SMS &amp; WhatsApp Alerts</h3>
-      <p class="muted small">Instant parent notifications whenever a child checks in successfully or an unauthorized out-of-bounds check-in is attempted.</p>
+      <h3>Parent Notifications</h3>
+      <p class="muted small">Instant WhatsApp and SMS alerts keep parents informed whenever attendance is recorded or missed.</p>
     </div>
   </div>
 </main>

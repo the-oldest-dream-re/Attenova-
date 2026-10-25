@@ -7,8 +7,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <meta name="mobile-web-app-capable" content="yes" />
-<title>Parent overview — Attenova</title>
-<meta name="description" content="See your child's attendance and get alerts when a check-in succeeds or fails." />
+<title>Parent Portal — Attenova</title>
+<meta name="description" content="View your child's live attendance progress, status records, and real-time alerts." />
 <link rel="manifest" href="manifest.json" />
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
 <link rel="apple-touch-icon" href="icons/icon.svg" />
@@ -23,10 +23,11 @@
   <div class="bar">
     <a class="logo" href="parent.html">
       <span class="mark">A</span>
-      <div><div class="name">Attenova</div><div class="tag">face + location verified</div></div>
+      <div><div class="name">Attenova</div><div class="tag">Parent Portal</div></div>
     </a>
     <nav id="app-nav">
-      <a href="parent.html" aria-current="page">Parent</a>
+      <a href="parent.html" aria-current="page">Dashboard</a>
+      <a href="preferences.html">Alert Preferences</a>
       <button class="btn-theme-toggle" id="theme-toggle-btn" type="button" aria-label="Toggle theme" title="Toggle dark/light mode"><span class="theme-icon-light">☀️</span><span class="theme-icon-dark">🌙</span></button>
       <button class="btn-header install-btn" id="pwa-install-btn" type="button" hidden>Install App</button>
     </nav>
@@ -34,15 +35,15 @@
 </header>
 
 <main class="wrap">
-  <div class="row between">
+  <div class="page-header row between">
     <div>
       <h1 id="parent-heading">Student Attendance Overview</h1>
-      <p class="muted small" id="parent-subheading">Computer Science, Semester 5 · roll no CS21-014</p>
+      <p class="muted small" id="parent-subheading">Computer Science, Semester 5 · Roll CS21-014</p>
     </div>
-    <a class="btn secondary" href="preferences.html">🔔 Alert settings</a>
+    <a class="btn secondary sm" href="preferences.html">🔔 Alert Settings</a>
   </div>
 
-  <!-- Linked Student (Child / Ward) Relationship Card -->
+  <!-- Linked Student Card -->
   <div class="panel mt" id="parent-linked-student-card">
     <div class="row between" style="gap:16px;align-items:center">
       <div class="row" style="gap:14px;align-items:center">
@@ -54,7 +55,7 @@
           <div class="row" style="gap:8px;align-items:center">
             <strong style="font-size:1.05rem;color:var(--foreground)" id="parent-child-name">Aarav Menon</strong>
             <span class="badge info" id="parent-child-roll-badge">Roll: CS21-014</span>
-            <span class="badge ok" id="parent-child-face-badge">Face ID Enrolled</span>
+            <span class="badge ok" id="parent-child-face-badge">Face Enrolled</span>
           </div>
           <div class="muted small" id="parent-child-meta" style="margin-top:3px">
             student@college.edu · Computer Science · Semester 5
@@ -62,63 +63,74 @@
         </div>
       </div>
 
-      <div style="flex:1;max-width:520px;min-width:260px">
-        <label for="parent-student-select" style="margin-bottom:4px">👨‍👩‍👧 Linked Child / Student (Switch or Link by Roll No / Email)</label>
+      <div style="flex:1;max-width:500px;min-width:260px">
+        <label for="parent-student-select" style="margin-bottom:4px">Linked Child / Student</label>
         <div class="row" style="gap:8px;flex-wrap:nowrap">
           <select id="parent-student-select" style="flex:1;min-width:140px"></select>
-          <input id="parent-student-input" placeholder="Or enter Roll No / Email…" style="flex:1;min-width:130px" />
-          <button class="btn sm" id="parent-link-student-btn" type="button">Link Student</button>
+          <input id="parent-student-input" placeholder="Or enter Roll / Email…" style="flex:1;min-width:130px" />
+          <button class="btn sm" id="parent-link-student-btn" type="button">Link</button>
         </div>
         <div class="small muted" id="parent-link-status" style="margin-top:4px"></div>
       </div>
     </div>
   </div>
 
-  <!-- Real-Time Attendance Summary Stats for Linked Student -->
-  <div class="grid grid-4 mt">
-    <div class="panel">
+  <!-- Real-Time Attendance Summary Stats -->
+  <div class="grid grid-4 mt stats-row">
+    <div class="panel stat-card">
+      <div class="stat-header">
+        <span class="stat-label-title">Attendance Rate</span>
+        <span id="parent-stat-eligibility"><span class="badge info sm">Target: 75%</span></span>
+      </div>
       <div class="stat" id="parent-stat-pct">0%</div>
-      <div class="muted small">overall attendance %</div>
       <div class="attendance-progress-track">
         <div class="attendance-progress-bar" id="parent-stat-progress-bar"></div>
       </div>
-      <div class="mt" id="parent-stat-eligibility"><span class="badge info">75% target</span></div>
     </div>
-    <div class="panel">
-      <div class="stat" id="parent-stat-ratio">0 / 0</div>
-      <div class="muted small">classes attended (present/late)</div>
+    <div class="panel stat-card">
+      <div class="stat-header">
+        <span class="stat-label-title">Classes Attended</span>
+      </div>
+      <div class="stat text-success" id="parent-stat-ratio">0 / 0</div>
+      <div class="muted small">sessions attended</div>
     </div>
-    <div class="panel">
-      <div class="stat" id="parent-stat-missed">0</div>
-      <div class="muted small">missed / rejected check-ins</div>
+    <div class="panel stat-card">
+      <div class="stat-header">
+        <span class="stat-label-title">Missed / Outside</span>
+      </div>
+      <div class="stat text-danger" id="parent-stat-missed">0</div>
+      <div class="muted small">unverified check-ins</div>
     </div>
-    <div class="panel">
-      <div class="stat"><span id="unread-count">0</span></div>
-      <div class="muted small">unread alerts for your child</div>
+    <div class="panel stat-card">
+      <div class="stat-header">
+        <span class="stat-label-title">Recent Alerts</span>
+      </div>
+      <div class="stat" id="unread-count">0</div>
+      <div class="muted small">new notifications</div>
     </div>
   </div>
 
-  <!-- Real-Time Parent Alerts for Linked Student -->
+  <!-- Real-Time Parent Alerts -->
   <div class="panel mt">
     <div class="row between mb">
       <div>
-        <h3>Real-time check-in alerts</h3>
-        <p class="muted small">Instant notifications sent to your WhatsApp/SMS whenever your linked child checks in or spoofing is suspected.</p>
+        <h3>Real-Time Check-In Alerts</h3>
+        <p class="muted small">Notifications dispatched via WhatsApp and SMS when your child checks in or misses class.</p>
       </div>
       <div class="row" style="gap:8px">
-        <a class="btn ghost sm" href="preferences.html">⚙️ Alert Phone &amp; Settings</a>
+        <a class="btn ghost sm" href="preferences.html">⚙️ Settings</a>
         <button class="btn ghost sm" id="mark-read" type="button">Mark all read</button>
       </div>
     </div>
     <div class="grid" style="gap:10px" id="parent-alerts-list"></div>
   </div>
 
-  <!-- Subject-Wise Attendance Breakdown for Linked Student -->
+  <!-- Subject-Wise Attendance Breakdown -->
   <div class="panel mt">
     <div class="row between mb">
       <div>
-        <h3>Subject-wise attendance percentage</h3>
-        <p class="muted small">Track your child's attendance across each enrolled subject.</p>
+        <h3>Subject Breakdown</h3>
+        <p class="muted small">Your child's attendance percentage across each enrolled course.</p>
       </div>
     </div>
     <div class="table-wrap">
@@ -128,8 +140,8 @@
             <th>Subject / Class</th>
             <th>Room &amp; Schedule</th>
             <th>Attended</th>
-            <th>Missed / Rejected</th>
-            <th>Total Sessions</th>
+            <th>Missed</th>
+            <th>Total</th>
             <th>Attendance %</th>
             <th>Status</th>
           </tr>
@@ -143,8 +155,8 @@
   <div class="panel mt">
     <div class="row between mb">
       <div>
-        <h3>Attendance history &amp; GPS camera proof</h3>
-        <p class="muted small" id="parent-history-count">Showing all recorded sessions for your child</p>
+        <h3>Attendance History</h3>
+        <p class="muted small" id="parent-history-count">Showing all recorded sessions</p>
       </div>
       <div class="row" style="gap:10px;align-items:flex-end">
         <div style="min-width:170px">
@@ -154,7 +166,7 @@
           </select>
         </div>
         <div>
-          <label for="parent-filter-date">Filter by Date</label>
+          <label for="parent-filter-date">Date</label>
           <input type="date" id="parent-filter-date" />
         </div>
         <button class="btn ghost sm" id="parent-filter-reset" type="button">Show All</button>
@@ -162,14 +174,14 @@
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Date</th><th>Class</th><th>GPS Location &amp; Coordinates</th><th>Status</th><th>Time</th><th>GPS Photo</th></tr></thead>
+        <thead><tr><th>Date</th><th>Class</th><th>Location</th><th>Status</th><th>Time</th><th>Photo Proof</th></tr></thead>
         <tbody id="parent-history-tbody"></tbody>
       </table>
     </div>
   </div>
 </main>
 
-<footer class="app">Attenova · parent view</footer>
+<footer class="app">Attenova · Parent Portal</footer>
 <script src="js/app.js"></script>
 </body>
 </html>

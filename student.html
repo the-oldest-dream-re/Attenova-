@@ -7,8 +7,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <meta name="mobile-web-app-capable" content="yes" />
-<title>Student check-in — Attenova</title>
-<meta name="description" content="Check in to class with a face scan verified against your classroom location and stamped with a GPS Camera tag." />
+<title>Student Portal — Attenova</title>
+<meta name="description" content="Check in to class with a face scan verified against your classroom location." />
 <link rel="manifest" href="manifest.json" />
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
 <link rel="apple-touch-icon" href="icons/icon.svg" />
@@ -24,10 +24,10 @@
   <div class="bar">
     <a class="logo" href="student.html">
       <span class="mark">A</span>
-      <div><div class="name">Attenova</div><div class="tag">face + location verified</div></div>
+      <div><div class="name">Attenova</div><div class="tag">Student Portal</div></div>
     </a>
     <nav id="app-nav">
-      <a href="student.html" aria-current="page">Student</a>
+      <a href="student.html" aria-current="page">Dashboard</a>
       <button class="btn-theme-toggle" id="theme-toggle-btn" type="button" aria-label="Toggle theme" title="Toggle dark/light mode"><span class="theme-icon-light">☀️</span><span class="theme-icon-dark">🌙</span></button>
       <button class="btn-header install-btn" id="pwa-install-btn" type="button" hidden>Install App</button>
     </nav>
@@ -35,136 +35,146 @@
 </header>
 
 <main class="wrap" data-tabs>
-  <div class="row between">
+  <div class="page-header row between">
     <div>
       <h1 id="student-greeting">Hello, Aarav</h1>
       <p class="muted small" id="student-meta">Roll no CS21-014 · Computer Science, Semester 5</p>
     </div>
-    <span class="badge ok" id="student-face-badge">Face + GPS Camera Enabled</span>
+    <span class="badge ok" id="student-face-badge">Face &amp; GPS Ready</span>
   </div>
 
   <!-- Overall Attendance Summary Cards -->
-  <div class="grid grid-4 mt">
-    <div class="panel">
+  <div class="grid grid-4 mt stats-row">
+    <div class="panel stat-card">
+      <div class="stat-header">
+        <span class="stat-label-title">Attendance Rate</span>
+        <span id="stat-eligibility-badge"><span class="badge info sm">Target: 75%</span></span>
+      </div>
       <div class="stat" id="stat-percent">0%</div>
-      <div class="muted small">overall attendance %</div>
       <div class="attendance-progress-track">
         <div class="attendance-progress-bar" id="stat-progress-bar"></div>
       </div>
-      <div class="mt" id="stat-eligibility-badge"><span class="badge info">75% target</span></div>
     </div>
-    <div class="panel">
-      <div class="stat" id="stat-attended">0</div>
-      <div class="muted small">classes attended (present/late)</div>
+    <div class="panel stat-card">
+      <div class="stat-header">
+        <span class="stat-label-title">Classes Attended</span>
+      </div>
+      <div class="stat text-success" id="stat-attended">0</div>
+      <div class="muted small">verified present</div>
     </div>
-    <div class="panel">
-      <div class="stat" id="stat-missed">0</div>
-      <div class="muted small">missed / rejected attempts</div>
+    <div class="panel stat-card">
+      <div class="stat-header">
+        <span class="stat-label-title">Missed / Outside</span>
+      </div>
+      <div class="stat text-danger" id="stat-missed">0</div>
+      <div class="muted small">unverified / missed</div>
     </div>
-    <div class="panel">
+    <div class="panel stat-card">
+      <div class="stat-header">
+        <span class="stat-label-title">Total Sessions</span>
+      </div>
       <div class="stat" id="stat-total">0</div>
-      <div class="muted small">total sessions recorded</div>
+      <div class="muted small">total scheduled</div>
     </div>
   </div>
 
   <!-- Student Dashboard Navigation Tabs -->
   <div class="tabs mt">
-    <button class="active" data-target="submit" type="button">📸 Submit Attendance</button>
-    <button data-target="classwise" type="button">📚 Class-Wise Attendance</button>
-    <button data-target="daywise" type="button">📅 Day-Wise Attendance</button>
+    <button class="active" data-target="submit" type="button">📸 Mark Attendance</button>
+    <button data-target="classwise" type="button">📚 Subject Breakdown</button>
+    <button data-target="daywise" type="button">📅 Daily Log</button>
   </div>
 
   <!-- TAB 1: Submit Attendance -->
   <section class="tabpanel" data-tab="submit">
     <div class="grid grid-2">
-      <div class="panel">
-        <div class="row between mb">
-          <div>
-            <h2 id="active-class-title">Check in to Data Structures</h2>
-            <p class="muted small" id="active-class-meta">09:00 – 10:00 · Room B-204 · session is live</p>
-          </div>
+      <div class="panel checkin-panel">
+        <div class="checkin-header mb">
+          <h2 id="active-class-title">Check in to Lecture</h2>
+          <p class="muted small" id="active-class-meta">Select an active class below to verify presence</p>
         </div>
 
         <div class="field">
-          <label for="student-class-select">Select active class to submit attendance</label>
+          <label for="student-class-select">Select Active Class</label>
           <select id="student-class-select"></select>
         </div>
 
-        <!-- Reference Face ID Enrollment & Matching Box -->
-        <div class="face-id-card mb" id="face-enrollment-box">
-          <div class="face-id-row">
-            <div class="face-avatar-box" id="student-ref-avatar-box">
-              <img id="student-ref-photo-img" alt="Enrolled Student Reference Face" hidden />
-              <span class="face-avatar-placeholder" id="student-ref-placeholder">👤</span>
+        <!-- Verification Mini-Cards Row -->
+        <div class="verification-status-grid mb">
+          <!-- Reference Face ID Card -->
+          <div class="verification-mini-card" id="face-enrollment-box">
+            <div class="verification-mini-header">
+              <div class="face-avatar-box" id="student-ref-avatar-box">
+                <img id="student-ref-photo-img" alt="Enrolled Student Reference Face" hidden />
+                <span class="face-avatar-placeholder" id="student-ref-placeholder">👤</span>
+              </div>
+              <div class="verification-mini-meta">
+                <div class="verification-title">Face ID Status</div>
+                <div id="ref-face-status-badge"><span class="badge warn sm">No Photo</span></div>
+              </div>
             </div>
-            <div style="flex:1;min-width:180px">
-              <div class="row between" style="gap:6px">
-                <strong style="font-size:.86rem;color:var(--foreground)">🧬 Student Reference Face ID</strong>
-                <span class="badge warn" id="ref-face-status-badge">No Photo Uploaded</span>
+            <p class="muted small verification-helper" id="ref-face-helper-text">
+              Front portrait photo required for face matching.
+            </p>
+            <div class="verification-actions">
+              <input type="file" id="upload-ref-face-input" accept="image/*" hidden />
+              <button class="btn secondary sm" id="upload-ref-face-btn" type="button">Upload Photo</button>
+              <button class="btn ghost sm" id="capture-ref-face-btn" type="button">Capture</button>
+            </div>
+          </div>
+
+          <!-- GPS Location Status Card -->
+          <div class="verification-mini-card" id="gps-telemetry-box">
+            <div class="verification-mini-header">
+              <div class="verification-icon-box">📍</div>
+              <div class="verification-mini-meta">
+                <div class="verification-title">Campus Geofence</div>
+                <div id="cal-distance-badge"><span class="badge warn sm">Awaiting GPS</span></div>
               </div>
-              <p class="muted small" id="ref-face-helper-text" style="margin:4px 0 8px">
-                Upload your clear front-facing photo so the camera can scan &amp; match your face during attendance check-in.
-              </p>
-              <div class="row" style="gap:8px">
-                <input type="file" id="upload-ref-face-input" accept="image/*" hidden />
-                <button class="btn secondary sm" id="upload-ref-face-btn" type="button">📤 Upload Student Photo</button>
-                <button class="btn ghost sm" id="capture-ref-face-btn" type="button">📸 Save from Camera</button>
-              </div>
+            </div>
+            <div id="gps-calibration-box" class="telemetry-gps-summary">
+              <div class="small" id="cal-student-loc">GPS Calibration Pending</div>
+              <div class="small muted" id="cal-class-loc" style="display:none">Classroom Radius</div>
+              <div id="cal-face-match-badge" style="display:none"><span class="badge info sm">Face Ready</span></div>
+            </div>
+            <p class="muted small verification-helper">
+              Must be inside classroom perimeter.
+            </p>
+            <div class="verification-actions">
+              <button class="btn secondary sm" id="calibrate-gps-btn" type="button">Calibrate GPS</button>
             </div>
           </div>
         </div>
 
-        <!-- GPS & Geofence Verification Telemetry -->
-        <div class="telemetry-hub-card mb" id="gps-telemetry-box">
-          <div class="telemetry-header">
-            <div class="row" style="gap:8px;align-items:center">
-              <span class="telemetry-pulse-dot"></span>
-              <strong style="font-size:.85rem;color:var(--foreground)">📍 Live GPS &amp; Geofence Verification</strong>
-            </div>
-            <div>
-              <button class="btn secondary sm" id="calibrate-gps-btn" type="button" style="padding:4px 10px;font-size:.74rem">🎯 Calibrate GPS</button>
-            </div>
-          </div>
-
-          <div id="gps-calibration-box" class="telemetry-gps-summary">
-            <div class="telemetry-row">
-              <span class="telemetry-row-icon">📍</span>
-              <div class="telemetry-row-body">
-                <div class="small" id="cal-student-loc"><strong>Your Location:</strong> Click "Calibrate GPS" to lock onto hardware satellites…</div>
-                <div class="small muted" id="cal-class-loc" style="margin-top:2px"><strong>Target:</strong> MGM College of Engineering and Technology, Kamothe, Panvel (Radius 60m)</div>
-              </div>
-            </div>
-            <div class="telemetry-badges-row">
-              <div id="cal-distance-badge"><span class="badge warn sm">Waiting for GPS lock…</span></div>
-              <div id="cal-face-match-badge"><span class="badge info sm">Face Ready</span></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="camera" data-open-btn="#cam-open" data-capture-btn="#cam-capture" data-status="#cam-status">
+        <!-- Camera Viewport -->
+        <div class="camera modern-camera" data-open-btn="#cam-open" data-capture-btn="#cam-capture" data-status="#cam-status">
           <div class="scan-line" id="cam-scan-line" hidden></div>
           <video playsinline muted></video>
           <img class="captured-photo" id="captured-photo" hidden alt="GPS Stamped Attendance Snapshot" />
           <div class="oval" hidden></div>
-          <div class="off">Camera is off — click "Open camera" to activate live GPS Map Stamp</div>
+          <div class="off">
+            <div class="camera-off-icon">📷</div>
+            <div class="camera-off-title">Camera Preview Inactive</div>
+            <div class="camera-off-desc">Click "Start Camera" to scan your face and verify attendance</div>
+          </div>
 
           <!-- Active Liveness Detection Anti-Spoofing HUD -->
           <div class="liveness-hud" id="liveness-hud-overlay" hidden>
             <div class="liveness-hud-top">
-              <span class="liveness-step-badge" id="liveness-step-badge">🛡️ Liveness Check: Initializing</span>
-              <span class="liveness-score-badge" id="liveness-score-badge">Anti-Spoof: Active</span>
+              <span class="liveness-step-badge" id="liveness-step-badge">Position face in frame</span>
+              <span class="liveness-score-badge" id="liveness-score-badge">Anti-Spoof Active</span>
             </div>
             <div class="liveness-challenge-card" id="liveness-challenge-card">
-              <div class="liveness-prompt-text" id="liveness-prompt-text">Position face inside oval &amp; blink eyes naturally</div>
+              <div class="liveness-prompt-text" id="liveness-prompt-text">Position face inside oval &amp; blink naturally</div>
               <div class="liveness-meter-row">
                 <div class="liveness-indicator" id="liveness-blink-indicator">
                   <span class="indicator-icon">👁️</span>
-                  <span class="indicator-label">Blink (EAR):</span>
+                  <span class="indicator-label">Blink:</span>
                   <span class="indicator-status" id="ear-status-val">0.32</span>
                 </div>
                 <div class="liveness-indicator" id="liveness-yaw-indicator">
                   <span class="indicator-icon">🔄</span>
-                  <span class="indicator-label">Head Yaw:</span>
+                  <span class="indicator-label">Head:</span>
                   <span class="indicator-status" id="yaw-status-val">Center (0°)</span>
                 </div>
               </div>
@@ -174,60 +184,62 @@
           <div class="gps-overlay" id="gps-live-overlay" hidden>
             <div class="gps-pin-box">📍</div>
             <div>
-              <div class="gps-overlay-place" id="gps-live-place">Detecting place name…</div>
+              <div class="gps-overlay-place" id="gps-live-place">Detecting location…</div>
               <div class="gps-overlay-coords" id="gps-live-coords">Lat: -- · Lng: --</div>
-              <div class="gps-overlay-time" id="gps-live-time">Live GPS Camera Tag</div>
+              <div class="gps-overlay-time" id="gps-live-time">GPS Verified</div>
             </div>
           </div>
         </div>
 
-        <div class="row mt camera-actions">
-          <button class="btn secondary" id="cam-open" type="button">📷 Open camera</button>
-          <button class="btn secondary" id="cam-flip" type="button">🔄 Flip Camera</button>
-          <button class="btn btn-submit-main" id="cam-capture" type="button" disabled>✓ Verify &amp; submit attendance</button>
-          <a class="btn ghost sm" id="download-stamped-photo" download="attenova-gps-checkin.jpg" hidden>Download GPS Photo</a>
+        <div class="camera-actions-toolbar mt">
+          <button class="btn secondary" id="cam-open" type="button">📷 Start Camera</button>
+          <button class="btn secondary" id="cam-flip" type="button">🔄 Flip</button>
+          <button class="btn btn-submit-main" id="cam-capture" type="button" disabled>✓ Submit Attendance</button>
+          <a class="btn ghost sm" id="download-stamped-photo" download="attenova-gps-checkin.jpg" hidden>Download Photo</a>
         </div>
-        <p class="small mt" id="cam-status">Your actual GPS location is calibrated and compared against the classroom radius. Check-ins outside the classroom radius are automatically rejected.</p>
+        <p class="small muted mt text-center" id="cam-status">Location and face are validated in real time against lecture requirements.</p>
       </div>
 
       <div class="grid">
         <div class="panel" id="student-parent-link-card">
           <div class="row between mb">
             <div>
-              <h3>👨‍👩‍👧 Linked Parent / Guardian</h3>
-              <p class="muted small" id="student-parent-helper">Your parent receives live check-in alerts &amp; can view your attendance using your Roll No or Email.</p>
+              <h3>Linked Parent / Guardian</h3>
+              <p class="muted small" id="student-parent-helper">Parents receive real-time check-in alerts via SMS &amp; WhatsApp.</p>
             </div>
             <span class="badge info" id="student-linked-parent-badge">Not Linked</span>
           </div>
-          <div class="row" style="gap:8px;align-items:flex-end">
-            <div style="flex:1;min-width:140px">
+          <div class="grid grid-3" style="gap:10px">
+            <div>
               <label for="student-parent-name">Parent Name</label>
               <input id="student-parent-name" placeholder="e.g. Rajesh Menon" />
             </div>
-            <div style="flex:1.2;min-width:160px">
+            <div>
               <label for="student-parent-email">Parent Email</label>
               <input id="student-parent-email" type="email" placeholder="parent@college.edu" />
             </div>
-            <div style="flex:1.2;min-width:160px">
-              <label for="student-parent-phone">Parent Phone / WhatsApp</label>
+            <div>
+              <label for="student-parent-phone">WhatsApp / Phone</label>
               <input id="student-parent-phone" placeholder="+919969665014" />
             </div>
-            <button class="btn secondary sm" id="student-link-parent-btn" type="button">Link Parent</button>
           </div>
-          <div class="small muted mt" id="student-link-parent-status"></div>
+          <div class="row between mt">
+            <button class="btn secondary sm" id="student-link-parent-btn" type="button">Save Parent Info</button>
+            <div class="small muted" id="student-link-parent-status"></div>
+          </div>
         </div>
 
         <div class="panel">
-          <h3>Quick subject-wise percentage</h3>
+          <h3>Subject Attendance Summary</h3>
           <p class="muted small mb">Live attendance percentage across your enrolled classes.</p>
           <div id="quick-class-summary"></div>
         </div>
 
         <div class="panel">
-          <h3>Recent attendance submissions</h3>
+          <h3>Recent Submissions</h3>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Date</th><th>Class</th><th>GPS Location &amp; Coordinates</th><th>Status</th><th>Snapshot</th></tr></thead>
+              <thead><tr><th>Date</th><th>Class</th><th>Location</th><th>Status</th><th>Snapshot</th></tr></thead>
               <tbody id="recent-list"></tbody>
             </table>
           </div>
@@ -241,8 +253,8 @@
     <div class="panel mb">
       <div class="row between mb">
         <div>
-          <h3>Class-wise attendance summary &amp; percentage</h3>
-          <p class="muted small">Track your attendance percentage and session count for each subject.</p>
+          <h3>Subject-Wise Attendance</h3>
+          <p class="muted small">Breakdown of attendance percentage and total sessions per subject.</p>
         </div>
       </div>
       <div class="table-wrap">
@@ -252,8 +264,8 @@
               <th>Class / Subject</th>
               <th>Room &amp; Schedule</th>
               <th>Attended</th>
-              <th>Missed / Rejected</th>
-              <th>Total Sessions</th>
+              <th>Missed</th>
+              <th>Total</th>
               <th>Attendance %</th>
               <th>Status</th>
             </tr>
@@ -266,13 +278,13 @@
     <div class="panel">
       <div class="row between mb">
         <div>
-          <h3>Filter records by class</h3>
-          <p class="muted small" id="classwise-filter-stats">Showing all class records</p>
+          <h3>Attendance History</h3>
+          <p class="muted small" id="classwise-filter-stats">Showing all records</p>
         </div>
-        <div style="min-width:240px">
-          <label for="student-filter-class">Select Class</label>
+        <div style="min-width:200px">
+          <label for="student-filter-class">Filter by Subject</label>
           <select id="student-filter-class">
-            <option value="all">All Classes</option>
+            <option value="all">All Subjects</option>
           </select>
         </div>
       </div>
@@ -283,10 +295,10 @@
               <th>Date</th>
               <th>Time</th>
               <th>Class</th>
-              <th>GPS Location &amp; Coordinates</th>
+              <th>Location</th>
               <th>Distance</th>
               <th>Status</th>
-              <th>GPS Photo</th>
+              <th>Photo</th>
             </tr>
           </thead>
           <tbody id="student-classwise-logs-tbody"></tbody>
@@ -300,8 +312,8 @@
     <div class="panel mb">
       <div class="row between mb">
         <div>
-          <h3>Day-wise attendance summary &amp; percentage</h3>
-          <p class="muted small">Daily breakdown of classes attended, missed/rejected, and daily attendance percentage.</p>
+          <h3>Daily Attendance Summary</h3>
+          <p class="muted small">Daily logs of classes attended, missed, and daily compliance.</p>
         </div>
       </div>
       <div class="table-wrap">
@@ -309,11 +321,11 @@
           <thead>
             <tr>
               <th>Date</th>
-              <th>Classes Attended</th>
-              <th>Missed / Rejected</th>
+              <th>Attended</th>
+              <th>Missed</th>
               <th>Total Check-ins</th>
-              <th>Subjects Covered</th>
-              <th>Day Attendance %</th>
+              <th>Subjects</th>
+              <th>Daily %</th>
             </tr>
           </thead>
           <tbody id="student-daywise-summary-tbody"></tbody>
@@ -324,16 +336,16 @@
     <div class="panel">
       <div class="row between mb">
         <div>
-          <h3>Check attendance for a specific date</h3>
+          <h3>Filter by Date</h3>
           <p class="muted small" id="daywise-filter-stats">Showing all dates</p>
         </div>
         <div class="row" style="gap:10px;align-items:flex-end">
           <div>
-            <label for="student-filter-date">Select Date</label>
+            <label for="student-filter-date">Date</label>
             <input type="date" id="student-filter-date" />
           </div>
           <button class="btn secondary sm" id="student-date-today-btn" type="button">Today</button>
-          <button class="btn ghost sm" id="student-date-all-btn" type="button">Show All Dates</button>
+          <button class="btn ghost sm" id="student-date-all-btn" type="button">All Dates</button>
         </div>
       </div>
       <div class="table-wrap">
@@ -343,10 +355,10 @@
               <th>Date</th>
               <th>Time</th>
               <th>Class</th>
-              <th>GPS Location &amp; Coordinates</th>
+              <th>Location</th>
               <th>Distance</th>
               <th>Status</th>
-              <th>GPS Photo</th>
+              <th>Photo</th>
             </tr>
           </thead>
           <tbody id="student-daywise-logs-tbody"></tbody>
@@ -356,7 +368,7 @@
   </section>
 </main>
 
-<footer class="app">Attenova · student view</footer>
+<footer class="app">Attenova · Student Portal</footer>
 <script src="js/app.js"></script>
 </body>
 </html>

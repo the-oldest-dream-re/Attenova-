@@ -7,8 +7,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <meta name="mobile-web-app-capable" content="yes" />
-<title>Faculty dashboard — Attenova</title>
-<meta name="description" content="Run live attendance sessions, watch check-ins arrive and download attendance reports." />
+<title>Faculty Portal — Attenova</title>
+<meta name="description" content="Manage classroom attendance sessions, monitor live student arrivals, and export reports." />
 <link rel="manifest" href="manifest.json" />
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
 <link rel="apple-touch-icon" href="icons/icon.svg" />
@@ -23,10 +23,10 @@
   <div class="bar">
     <a class="logo" href="faculty.html">
       <span class="mark">A</span>
-      <div><div class="name">Attenova</div><div class="tag">face + location verified</div></div>
+      <div><div class="name">Attenova</div><div class="tag">Faculty Portal</div></div>
     </a>
     <nav id="app-nav">
-      <a href="faculty.html" aria-current="page">Faculty</a>
+      <a href="faculty.html" aria-current="page">Dashboard</a>
       <button class="btn-theme-toggle" id="theme-toggle-btn" type="button" aria-label="Toggle theme" title="Toggle dark/light mode"><span class="theme-icon-light">☀️</span><span class="theme-icon-dark">🌙</span></button>
       <button class="btn-header install-btn" id="pwa-install-btn" type="button" hidden>Install App</button>
     </nav>
@@ -34,38 +34,38 @@
 </header>
 
 <main class="wrap" data-tabs>
-  <div class="row between">
+  <div class="page-header row between">
     <div>
-      <h1>Faculty dashboard</h1>
+      <h1>Faculty Dashboard</h1>
       <p class="muted small" id="faculty-meta">Prof. Nandini Deshpande · Computer Science</p>
     </div>
   </div>
 
   <div class="tabs mt">
-    <button class="active" data-target="classes" type="button">Classes</button>
-    <button data-target="live" type="button">Live check-ins</button>
-    <button data-target="faces" type="button">🧬 Student Face Photos</button>
-    <button data-target="reports" type="button">Reports</button>
+    <button class="active" data-target="classes" type="button">📚 My Classes</button>
+    <button data-target="live" type="button">⚡ Live Check-Ins</button>
+    <button data-target="faces" type="button">👤 Student Face Roster</button>
+    <button data-target="reports" type="button">📊 Reports &amp; Export</button>
   </div>
 
   <section class="tabpanel" data-tab="classes">
     <div class="grid grid-2" id="classes-grid"></div>
 
     <div class="panel mt">
-      <h3>Add a new class</h3>
-      <p class="muted small">Create a classroom geofence so students can check in when a session is live.</p>
+      <h3>Create Class Geofence</h3>
+      <p class="muted small">Set up classroom location boundaries so students can check in during live lectures.</p>
       <form id="add-class-form" class="mt">
         <div class="grid grid-3">
           <div class="field">
-            <label for="cname">Class name</label>
+            <label for="cname">Class Name</label>
             <input id="cname" placeholder="Computer Networks" required />
           </div>
           <div class="field">
-            <label for="croom">Room</label>
+            <label for="croom">Room Number</label>
             <input id="croom" placeholder="Room B-302" value="Room B-302" required />
           </div>
           <div class="field">
-            <label for="cschedule">Schedule</label>
+            <label for="cschedule">Schedule Time</label>
             <input id="cschedule" placeholder="10:00 – 11:00" value="10:00 – 11:00" />
           </div>
         </div>
@@ -79,13 +79,13 @@
             <input id="lng" placeholder="73.0860" value="73.0860" required />
           </div>
           <div class="field">
-            <label for="rad">Radius (m)</label>
+            <label for="rad">Radius (meters)</label>
             <input id="rad" type="number" placeholder="60" value="60" required />
           </div>
         </div>
         <div class="row">
-          <button class="btn" type="submit">Save class</button>
-          <button class="btn secondary" id="use-gps-btn" type="button">Use my current GPS</button>
+          <button class="btn btn-submit-main" type="submit">Save Classroom</button>
+          <button class="btn secondary" id="use-gps-btn" type="button">📍 Use Current GPS</button>
           <span class="small muted" id="class-save-status"></span>
         </div>
       </form>
@@ -94,17 +94,18 @@
 
   <section class="tabpanel" data-tab="live" hidden>
     <div class="panel mb">
-      <h3>Record manual attendance</h3>
-      <form id="manual-attendance-form" class="row mt">
-        <div style="flex:1;min-width:180px">
+      <h3>Record Manual Attendance</h3>
+      <p class="muted small mb">Add or update attendance status for a student manually.</p>
+      <form id="manual-attendance-form" class="row mt" style="gap:12px">
+        <div style="flex:1.2;min-width:180px">
           <label for="m-student">Student</label>
           <select id="m-student"></select>
         </div>
-        <div style="flex:1;min-width:180px">
+        <div style="flex:1.2;min-width:180px">
           <label for="m-class">Class</label>
           <select id="m-class"></select>
         </div>
-        <div style="flex:1;min-width:150px">
+        <div style="flex:1;min-width:140px">
           <label for="m-status">Status</label>
           <select id="m-status">
             <option value="Present">Present</option>
@@ -113,7 +114,7 @@
           </select>
         </div>
         <div style="align-self:flex-end">
-          <button class="btn" type="submit">Add entry</button>
+          <button class="btn" type="submit">Submit Entry</button>
         </div>
       </form>
     </div>
@@ -121,13 +122,13 @@
     <div class="panel">
       <div class="row between mb">
         <div>
-          <h3>Live check-ins feed</h3>
+          <h3>Live Check-Ins Feed</h3>
           <span class="muted small" id="live-count-label"></span>
         </div>
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Student</th><th>Roll no</th><th>Class</th><th>GPS Location &amp; Coordinates</th><th>Result</th><th>Distance</th><th>Time</th><th>GPS Photo</th><th>Action</th></tr></thead>
+          <thead><tr><th>Student</th><th>Roll No</th><th>Class</th><th>Location</th><th>Result</th><th>Distance</th><th>Time</th><th>Photo</th><th>Action</th></tr></thead>
           <tbody id="faculty-live-tbody"></tbody>
         </table>
       </div>
@@ -138,8 +139,8 @@
     <div class="panel">
       <div class="row between mb">
         <div>
-          <h3>Enrolled Student Reference Face Photos</h3>
-          <p class="muted small">Upload or update reference portraits for students. During check-in, the student's live camera scan is matched against this reference photo.</p>
+          <h3>Enrolled Student Reference Photos</h3>
+          <p class="muted small">Portraits used by the camera during attendance to verify student presence.</p>
         </div>
         <span class="small muted" id="faculty-face-upload-status"></span>
       </div>
@@ -152,8 +153,8 @@
               <th>Student Name</th>
               <th>Roll No</th>
               <th>Email</th>
-              <th>Biometric Status</th>
-              <th>Upload / Replace Photo</th>
+              <th>Status</th>
+              <th>Update Photo</th>
             </tr>
           </thead>
           <tbody id="faculty-students-faces-tbody"></tbody>
@@ -164,22 +165,27 @@
 
   <section class="tabpanel" data-tab="reports" hidden>
     <div class="panel">
-      <h3>Attendance report</h3>
-      <div class="row mt">
-        <div style="flex:1;min-width:180px">
+      <div class="row between mb">
+        <div>
+          <h3>Attendance Reports</h3>
+          <p class="muted small">Filter records by class and date range, then export as CSV.</p>
+        </div>
+      </div>
+      <div class="row mt" style="gap:12px">
+        <div style="flex:1.5;min-width:180px">
           <label for="rclass">Class</label>
           <select id="rclass"><option value="all">All Classes</option></select>
         </div>
-        <div style="flex:1;min-width:150px"><label for="from">From</label><input id="from" type="date" value="2026-09-01" /></div>
-        <div style="flex:1;min-width:150px"><label for="to">To</label><input id="to" type="date" value="2026-12-31" /></div>
+        <div style="flex:1;min-width:140px"><label for="from">From Date</label><input id="from" type="date" value="2026-09-01" /></div>
+        <div style="flex:1;min-width:140px"><label for="to">To Date</label><input id="to" type="date" value="2026-12-31" /></div>
       </div>
       <div class="row mt">
-        <button class="btn" id="export-btn" type="button">Download CSV report</button>
-        <span class="small muted" id="export-status">Downloads as a spreadsheet-ready CSV file.</span>
+        <button class="btn" id="export-btn" type="button">📥 Download CSV Report</button>
+        <span class="small muted" id="export-status">Ready to download.</span>
       </div>
       <div class="table-wrap mt">
         <table>
-          <thead><tr><th>Roll no</th><th>Student</th><th>Class</th><th>Date</th><th>GPS Location &amp; Coordinates</th><th>Status</th><th>Time</th><th>Distance</th><th>GPS Photo</th><th>Action</th></tr></thead>
+          <thead><tr><th>Roll No</th><th>Student</th><th>Class</th><th>Date</th><th>Location</th><th>Status</th><th>Time</th><th>Distance</th><th>Photo</th><th>Action</th></tr></thead>
           <tbody id="faculty-report-tbody"></tbody>
         </table>
       </div>
@@ -187,7 +193,7 @@
   </section>
 </main>
 
-<footer class="app">Attenova · faculty view</footer>
+<footer class="app">Attenova · Faculty Portal</footer>
 <script src="js/app.js"></script>
 </body>
 </html>

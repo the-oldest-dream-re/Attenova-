@@ -37,27 +37,43 @@
 </header>
 
 <main class="wrap" data-tabs>
-  <div class="row between">
+  <div class="page-header row between">
     <div>
       <h1>Institution Admin Portal</h1>
       <p class="muted small" id="admin-meta">Manage students, faculty, parents, classes, and attendance records</p>
     </div>
-    <span class="badge info">Full Institutional Access</span>
+    <span class="badge ok">Institutional Admin</span>
   </div>
 
-  <div class="grid grid-4 mt">
-    <div class="panel"><div class="stat" id="admin-count-users">0</div><div class="muted small">registered accounts</div></div>
-    <div class="panel"><div class="stat" id="admin-count-students">0</div><div class="muted small">enrolled students</div></div>
-    <div class="panel"><div class="stat" id="admin-count-classes">0</div><div class="muted small">active classes</div></div>
-    <div class="panel"><div class="stat" id="admin-count-logs">0</div><div class="muted small">attendance logs</div></div>
+  <div class="grid grid-4 mt stats-row">
+    <div class="panel stat-card">
+      <div class="stat-header"><span class="stat-label-title">Accounts</span></div>
+      <div class="stat" id="admin-count-users">0</div>
+      <div class="muted small">registered users</div>
+    </div>
+    <div class="panel stat-card">
+      <div class="stat-header"><span class="stat-label-title">Students</span></div>
+      <div class="stat" id="admin-count-students">0</div>
+      <div class="muted small">enrolled students</div>
+    </div>
+    <div class="panel stat-card">
+      <div class="stat-header"><span class="stat-label-title">Classes</span></div>
+      <div class="stat" id="admin-count-classes">0</div>
+      <div class="muted small">active geofences</div>
+    </div>
+    <div class="panel stat-card">
+      <div class="stat-header"><span class="stat-label-title">Logs</span></div>
+      <div class="stat" id="admin-count-logs">0</div>
+      <div class="muted small">recorded check-ins</div>
+    </div>
   </div>
 
   <div class="tabs mt">
-    <button class="active" data-target="users" type="button">Users &amp; Accounts</button>
-    <button data-target="classes" type="button">Classes &amp; Geofences</button>
-    <button data-target="logs" type="button">Attendance Logs</button>
-    <button data-target="oauth" type="button">Google OAuth Setup</button>
-    <button data-target="enterprise" type="button">💬 Parent Notifications (Twilio)</button>
+    <button class="active" data-target="users" type="button">👥 Users &amp; Accounts</button>
+    <button data-target="classes" type="button">🏫 Classes &amp; Geofences</button>
+    <button data-target="logs" type="button">📋 Attendance Logs</button>
+    <button data-target="oauth" type="button">🔐 Google OAuth</button>
+    <button data-target="enterprise" type="button">💬 Parent Alerts (Twilio)</button>
   </div>
 
   <!-- TAB 1: Users & Accounts -->

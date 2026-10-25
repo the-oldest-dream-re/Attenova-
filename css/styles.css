@@ -24,7 +24,7 @@
   /* Secondary & Muted Neutrals */
   --secondary: #f1f5f9;
   --muted: #f1f5f9;
-  --muted-foreground: #475569;
+  --muted-foreground: #64748b;
 
   /* Accent & Status Colors */
   --accent: #6366f1;
@@ -79,28 +79,9 @@
   border-color: var(--border);
 }
 
-html {
-  scroll-behavior: smooth;
-}
-
 html, body {
   overflow-x: hidden;
   -webkit-tap-highlight-color: transparent;
-}
-
-/* Accessible Keyboard Focus Rings (WCAG 2.1 AA) */
-:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-
-button:focus-visible,
-a:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
 }
 
 body {
@@ -135,10 +116,6 @@ main.wrap {
   width: 100%;
 }
 
-.page-header {
-  margin-bottom: 24px;
-}
-
 h1, h2, h3, h4 {
   font-family: "Outfit", "Sora", "Plus Jakarta Sans", system-ui, sans-serif;
   letter-spacing: -0.025em;
@@ -147,9 +124,9 @@ h1, h2, h3, h4 {
   font-weight: 700;
 }
 
-h1 { font-size: clamp(1.5rem, 3.2vw, 1.95rem); line-height: 1.2; letter-spacing: -0.03em; }
-h2 { font-size: clamp(1.2rem, 2.5vw, 1.45rem); line-height: 1.25; letter-spacing: -0.025em; }
-h3 { font-size: 1.08rem; line-height: 1.3; letter-spacing: -0.02em; }
+h1 { font-size: 1.75rem; line-height: 1.2; }
+h2 { font-size: 1.3rem; line-height: 1.25; }
+h3 { font-size: 1.05rem; line-height: 1.3; }
 
 a {
   color: var(--primary);
@@ -588,10 +565,10 @@ input:focus, select:focus {
 /* ---- Segmented Role Pills & Auth Components --------------------------- */
 .role-pills {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 5px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
   background: var(--surface-2);
-  padding: 4px;
+  padding: 5px;
   border-radius: var(--radius);
   border: 1px solid var(--border);
 }
@@ -603,9 +580,9 @@ input:focus, select:focus {
 .role-pills label {
   margin: 0;
   text-align: center;
-  padding: 8px 6px;
+  padding: 9px 10px;
   border-radius: calc(var(--radius) - 4px);
-  font-size: 0.81rem;
+  font-size: 0.83rem;
   font-weight: 600;
   color: var(--muted-foreground);
   cursor: pointer;
@@ -666,19 +643,6 @@ input:focus, select:focus {
   border-top: 1px solid var(--border);
 }
 
-.demo-accounts-label {
-  font-size: 0.74rem;
-  color: var(--muted-foreground);
-  font-weight: 600;
-  margin-bottom: 8px;
-}
-
-.demo-chips-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
 .demo-chip {
   display: inline-flex;
   align-items: center;
@@ -691,6 +655,7 @@ input:focus, select:focus {
   color: var(--foreground);
   border: 1px solid var(--border);
   cursor: pointer;
+  margin: 5px 5px 0 0;
   transition: all 0.18s ease;
 }
 
@@ -1170,38 +1135,12 @@ input:focus, select:focus {
   align-items: center;
 }
 
-/* ---- Stat Cards & Metrics --------------------------------------------- */
+/* ---- Stat Cards for Enterprise Tab ------------------------------------ */
 .stat-card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
-}
-
-.stat-card:hover {
-  transform: translateY(-1px);
-  border-color: rgba(99, 102, 241, 0.35);
-  box-shadow: var(--shadow-sm);
-}
-
-.stat-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-
-.stat-label-title {
-  font-size: 0.74rem;
-  font-weight: 700;
-  color: var(--muted-foreground);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  padding: 14px 16px;
 }
 
 .stat-card .stat-title {
@@ -1222,145 +1161,6 @@ input:focus, select:focus {
 
 .stat-card .stat-value.small {
   font-size: 0.98rem;
-}
-
-.text-success { color: var(--success) !important; }
-.text-danger { color: var(--destructive) !important; }
-.text-center { text-align: center; }
-
-/* ---- Verification Status Grid (Face ID & Geofence) ------------------- */
-.verification-status-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.verification-mini-card {
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 12px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  transition: border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
-}
-
-.verification-mini-card:hover {
-  border-color: rgba(99, 102, 241, 0.35);
-  background: var(--card);
-  box-shadow: var(--shadow-sm);
-}
-
-.verification-mini-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.verification-icon-box {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: var(--primary-soft);
-  color: var(--primary);
-  display: grid;
-  place-items: center;
-  font-size: 1rem;
-  flex: none;
-}
-
-.verification-mini-card .face-avatar-box {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  border: 1.5px solid rgba(79, 70, 229, 0.35);
-  margin: 0;
-}
-
-.verification-mini-card .face-avatar-placeholder {
-  font-size: 1.1rem;
-}
-
-.verification-mini-meta {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-}
-
-.verification-title {
-  font-size: 0.81rem;
-  font-weight: 700;
-  color: var(--foreground);
-}
-
-.verification-helper {
-  font-size: 0.74rem;
-  margin: 0;
-  line-height: 1.35;
-  color: var(--muted-foreground);
-}
-
-.verification-actions {
-  display: flex;
-  gap: 6px;
-  margin-top: 4px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.verification-actions .btn {
-  padding: 4px 10px;
-  font-size: 0.74rem;
-}
-
-/* Modern Camera Off State & Action Toolbar */
-.camera .off {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  text-align: center;
-  padding: 24px;
-  background: radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.12) 0%, rgba(8, 12, 20, 0.96) 100%);
-  color: #cbd5e1;
-}
-
-.camera-off-icon {
-  font-size: 2.2rem;
-  line-height: 1;
-  opacity: 0.85;
-}
-
-.camera-off-title {
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: #ffffff;
-}
-
-.camera-off-desc {
-  font-size: 0.82rem;
-  color: #94a3b8;
-  max-width: 28ch;
-  line-height: 1.4;
-}
-
-.camera-actions-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-}
-
-.camera-actions-toolbar .btn-submit-main {
-  flex: 1;
-  min-width: 180px;
 }
 
 /* ---- Student Reference Face ID Card & Avatars ------------------------- */
@@ -1585,28 +1385,12 @@ th {
   padding-bottom: 52px;
 }
 
-.hero-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  border-radius: 999px;
-  font-size: 0.76rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  background: var(--primary-soft);
-  color: var(--primary);
-  border: 1px solid rgba(79, 70, 229, 0.2);
-  margin-bottom: 12px;
-}
-
 .hero h1 {
   font-size: clamp(2rem, 4.2vw, 3rem);
-  line-height: 1.14;
+  line-height: 1.12;
   letter-spacing: -0.035em;
   color: var(--foreground);
-  margin-top: 6px;
+  margin-top: 14px;
   margin-bottom: 16px;
 }
 
@@ -1623,36 +1407,6 @@ th {
   line-height: 1.6;
   max-width: 48ch;
   margin: 0;
-}
-
-.hero-features-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 22px;
-}
-
-.hero-feature-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 0.9rem;
-  color: var(--foreground);
-  font-weight: 500;
-}
-
-.feature-check {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: rgba(16, 185, 129, 0.14);
-  color: #10b981;
-  font-size: 0.82rem;
-  font-weight: 800;
-  flex-shrink: 0;
 }
 
 .hero-stats-row {
@@ -1695,15 +1449,8 @@ th {
   letter-spacing: 0.04em;
 }
 
-.hero .panel,
-.login-panel {
+.hero .panel {
   color: var(--foreground);
-  background: var(--card);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--border);
-  box-shadow: 0 20px 40px -15px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(79, 70, 229, 0.08);
-}
   background: var(--card);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
@@ -1759,63 +1506,6 @@ th {
   max-width: 480px;
   max-height: 92vh;
   overflow-y: auto;
-}
-
-.confirm-modal {
-  max-width: 420px;
-}
-
-/* ---- Reusable Empty States ------------------------------------------- */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 36px 20px;
-  gap: 8px;
-}
-
-.empty-state-icon {
-  font-size: 2.2rem;
-  line-height: 1;
-  opacity: 0.85;
-  margin-bottom: 2px;
-}
-
-.empty-state-title {
-  font-size: 0.96rem;
-  font-weight: 700;
-  color: var(--foreground);
-}
-
-.empty-state-desc {
-  font-size: 0.82rem;
-  color: var(--muted-foreground);
-  max-width: 40ch;
-  line-height: 1.45;
-  margin: 0;
-}
-
-.empty-state-actions {
-  margin-top: 10px;
-}
-
-/* Small Inline Loading Spinner */
-.spinner-sm {
-  display: inline-block;
-  width: 13px;
-  height: 13px;
-  border: 2px solid rgba(255, 255, 255, 0.35);
-  border-top-color: #ffffff;
-  border-radius: 50%;
-  animation: spinner-rotate 0.7s linear infinite;
-  margin-right: 6px;
-  vertical-align: middle;
-}
-
-@keyframes spinner-rotate {
-  to { transform: rotate(360deg); }
 }
 
 /* ---- Attendance Progress Meter ---------------------------------------- */
@@ -2144,19 +1834,12 @@ footer.app {
     font-size: 0.63rem;
   }
 
-  .verification-status-grid {
-    grid-template-columns: 1fr;
-    gap: 8px;
-  }
-
-  .camera-actions,
-  .camera-actions-toolbar {
+  .camera-actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 8px;
   }
-  .camera-actions .btn-submit-main,
-  .camera-actions-toolbar .btn-submit-main {
+  .camera-actions .btn-submit-main {
     grid-column: 1 / -1;
     order: 3;
     min-height: 48px;
@@ -2203,15 +1886,9 @@ footer.app {
     font-size: 0.67rem;
   }
 
-  .role-pills {
-    grid-template-columns: repeat(4, 1fr);
-    gap: 3px;
-    padding: 3px;
-  }
-
   .role-pills label {
-    padding: 7px 3px;
-    font-size: 0.72rem;
+    padding: 9px 6px;
+    font-size: 0.78rem;
   }
 
   .modal {
@@ -2228,8 +1905,8 @@ footer.app {
     font-size: 1.32rem;
   }
   .role-pills label {
-    font-size: 0.68rem;
-    padding: 6px 2px;
+    font-size: 0.73rem;
+    padding: 8px 4px;
   }
 }
 

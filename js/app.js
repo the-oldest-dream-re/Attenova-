@@ -9,19 +9,16 @@ function showToast(message, type = 'info', duration = 3500) {
     container = document.createElement('div');
     container.id = 'attenova-toast-container';
     container.className = 'toast-container';
-    container.setAttribute('aria-live', 'polite');
-    container.setAttribute('aria-atomic', 'true');
     document.body.appendChild(container);
   }
 
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
-  toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
   const icon = type === 'success' ? '✓' : type === 'error' ? '✕' : type === 'warning' ? '⚠️' : 'ℹ️';
   toast.innerHTML = `
     <span class="toast-icon">${icon}</span>
     <span class="toast-msg">${message}</span>
-    <button type="button" class="toast-close" aria-label="Close notification">&times;</button>
+    <button type="button" class="toast-close" aria-label="Close">&times;</button>
   `;
   container.appendChild(toast);
 
@@ -39,74 +36,6 @@ function showToast(message, type = 'info', duration = 3500) {
   timer = setTimeout(removeToast, duration);
 }
 window.showToast = showToast;
-
-// ---- Accessible Confirmation Dialog for Destructive Actions -----------
-function confirmDialog({ title, message, confirmText = 'Confirm', cancelText = 'Cancel', danger = true }) {
-  return new Promise((resolve) => {
-    let backdrop = document.querySelector('#attenova-confirm-modal');
-    if (!backdrop) {
-      backdrop = document.createElement('div');
-      backdrop.id = 'attenova-confirm-modal';
-      backdrop.className = 'modal-backdrop';
-      document.body.appendChild(backdrop);
-    }
-    backdrop.innerHTML = `
-      <div class="modal confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-          <div style="width:40px;height:40px;border-radius:10px;background:${danger ? 'rgba(239,68,68,0.12)' : 'var(--primary-soft)'};color:${danger ? '#ef4444' : 'var(--primary)'};display:grid;place-items:center;font-size:1.25rem;flex:none">
-            ${danger ? '⚠️' : 'ℹ️'}
-          </div>
-          <div>
-            <h3 id="confirm-modal-title" style="margin:0;font-size:1.15rem">${title}</h3>
-          </div>
-        </div>
-        <p class="muted small" style="margin:0 0 20px 0;line-height:1.5">${message}</p>
-        <div class="row" style="justify-content:flex-end;gap:10px">
-          <button type="button" class="btn secondary sm" id="confirm-modal-cancel">${cancelText}</button>
-          <button type="button" class="btn ${danger ? 'danger' : ''} sm" id="confirm-modal-ok">${confirmText}</button>
-        </div>
-      </div>
-    `;
-    backdrop.hidden = false;
-    const cancelBtn = backdrop.querySelector('#confirm-modal-cancel');
-    const okBtn = backdrop.querySelector('#confirm-modal-ok');
-    if (cancelBtn) cancelBtn.focus();
-
-    const cleanup = (result) => {
-      backdrop.hidden = true;
-      document.removeEventListener('keydown', onKeyDown);
-      resolve(result);
-    };
-
-    const onKeyDown = (e) => {
-      if (e.key === 'Escape') cleanup(false);
-    };
-    document.addEventListener('keydown', onKeyDown);
-
-    if (cancelBtn) cancelBtn.onclick = () => cleanup(false);
-    if (okBtn) okBtn.onclick = () => cleanup(true);
-    backdrop.onclick = (e) => {
-      if (e.target === backdrop) cleanup(false);
-    };
-  });
-}
-window.confirmDialog = confirmDialog;
-
-// ---- Reusable Accessible Empty Table State Generator -------------------
-function renderEmptyTableState(colspan, icon, title, description, actionBtnHtml = '') {
-  return `
-    <tr>
-      <td colspan="${colspan}">
-        <div class="empty-state">
-          <div class="empty-state-icon">${icon}</div>
-          <div class="empty-state-title">${title}</div>
-          <div class="empty-state-desc">${description}</div>
-          ${actionBtnHtml ? `<div class="empty-state-actions">${actionBtnHtml}</div>` : ''}
-        </div>
-      </td>
-    </tr>
-  `;
-}
 
 // ---- Theme Engine (Dark / Light SaaS Switcher) ------------------------
 function initThemeEngine() {
@@ -266,23 +195,6 @@ function getDefaultSeedDB() {
     ],
     attendance: [
       {
-        id: 'att_today_1',
-        studentId: 'usr_student_1',
-        studentName: 'Aarav Menon',
-        rollNo: 'CS21-014',
-        classId: 'cls_1',
-        className: 'Data Structures',
-        date: new Date().toISOString().slice(0, 10),
-        displayDate: 'Today',
-        status: 'Present',
-        badgeType: 'ok',
-        time: '09:02',
-        distance: '8 m',
-        lat: 19.0176,
-        lng: 73.0860,
-        locationName: 'Room B-204 · MGM College of Engineering and Technology, Kamothe, Panvel'
-      },
-      {
         id: 'att_1',
         studentId: 'usr_student_1',
         studentName: 'Aarav Menon',
@@ -403,14 +315,6 @@ function getDefaultSeedDB() {
       }
     ],
     alerts: [
-      {
-        id: 'alt_today_1',
-        studentRollNo: 'CS21-014',
-        type: 'ok',
-        title: 'Checked in to Data Structures (Present)',
-        detail: 'Today, 09:02 · 📍 Room B-204 · MGM Campus (19.0176°, 73.0860°) · WhatsApp alert delivered',
-        unread: true
-      },
       {
         id: 'alt_1',
         studentRollNo: 'CS21-014',
@@ -2011,31 +1915,15 @@ if (pwaInstallBtn) {
   });
 }
 
-// ---- Accessible Keyboard & ARIA Tabs --------------------------------
+// ---- Tabs -------------------------------------------------------------
 document.querySelectorAll('[data-tabs]').forEach((group) => {
-  const buttons = Array.from(group.querySelectorAll('.tabs button'));
-  buttons.forEach((btn, index) => {
-    btn.setAttribute('role', 'tab');
-    btn.setAttribute('aria-selected', btn.classList.contains('active') ? 'true' : 'false');
+  const buttons = group.querySelectorAll('.tabs button');
+  buttons.forEach((btn) => {
     btn.addEventListener('click', () => {
-      buttons.forEach((b) => {
-        const isActive = b === btn;
-        b.classList.toggle('active', isActive);
-        b.setAttribute('aria-selected', isActive ? 'true' : 'false');
-      });
+      buttons.forEach((b) => b.classList.toggle('active', b === btn));
       group.querySelectorAll('.tabpanel').forEach((p) => {
         p.hidden = p.dataset.tab !== btn.dataset.target;
       });
-    });
-    btn.addEventListener('keydown', (e) => {
-      let nextIndex = null;
-      if (e.key === 'ArrowRight') nextIndex = (index + 1) % buttons.length;
-      if (e.key === 'ArrowLeft') nextIndex = (index - 1 + buttons.length) % buttons.length;
-      if (nextIndex !== null) {
-        e.preventDefault();
-        buttons[nextIndex].focus();
-        buttons[nextIndex].click();
-      }
     });
   });
 });
@@ -2335,35 +2223,13 @@ async function initStudentDashboard() {
     linkParentBtn.addEventListener('click', async () => {
       const parentEmail = (parentEmailInput ? parentEmailInput.value : '').trim();
       const parentName = (parentNameInput ? parentNameInput.value : '').trim();
-      let parentPhone = (parentPhoneInput ? parentPhoneInput.value : '').trim();
+      const parentPhone = (parentPhoneInput ? parentPhoneInput.value : '').trim();
       if (!parentEmail || !parentEmail.includes('@')) {
-        if (linkParentStatus) {
-          linkParentStatus.innerHTML = '<span class="text-danger">⚠️ Please enter a valid parent email address (e.g. parent@example.com).</span>';
-        }
-        if (parentEmailInput) parentEmailInput.focus();
+        if (linkParentStatus) linkParentStatus.textContent = '⚠️ Please enter a valid parent email address.';
         return;
       }
-
-      // Validate and format phone number for Twilio WhatsApp / SMS if provided
-      if (parentPhone) {
-        const digitsOnly = parentPhone.replace(/\D/g, '');
-        if (digitsOnly.length < 10) {
-          if (linkParentStatus) {
-            linkParentStatus.innerHTML = '<span class="text-danger">⚠️ Please enter at least 10 digits for the parent WhatsApp/SMS phone number.</span>';
-          }
-          if (parentPhoneInput) parentPhoneInput.focus();
-          return;
-        }
-        if (!parentPhone.startsWith('+')) {
-          parentPhone = digitsOnly.length === 10 ? '+91' + digitsOnly : '+' + digitsOnly;
-          if (parentPhoneInput) parentPhoneInput.value = parentPhone;
-        }
-      }
-
       try {
         linkParentBtn.disabled = true;
-        linkParentBtn.innerHTML = '<span class="spinner-sm"></span> Saving...';
-        if (linkParentStatus) linkParentStatus.innerHTML = '<span class="muted">Saving parent contact details...</span>';
         const res = await apiRequest('/api/student/link-parent', {
           method: 'PUT',
           body: JSON.stringify({ parentEmail, parentName, parentPhone })
@@ -2380,21 +2246,14 @@ async function initStudentDashboard() {
         }
         renderStudentParentCard();
         if (linkParentStatus) {
-          linkParentStatus.innerHTML = `<span class="text-success">✓ Saved! Parent (${parentEmail}${parentPhone ? ' · ' + parentPhone : ''}) will receive live attendance alerts.</span>`;
-        }
-        if (window.showToast) {
-          showToast('Parent contact updated. Live check-in alerts active.', 'success');
+          linkParentStatus.textContent = `✓ Linked parent (${parentEmail}${parentPhone ? ' · ' + parentPhone : ''}) to your student profile (${
+            user ? user.rollNo : ''
+          }).`;
         }
       } catch (err) {
-        if (linkParentStatus) {
-          linkParentStatus.innerHTML = `<span class="text-danger">⚠️ ${err.message || 'Could not link parent'}</span>`;
-        }
-        if (window.showToast) {
-          showToast(err.message || 'Could not link parent', 'error');
-        }
+        if (linkParentStatus) linkParentStatus.textContent = 'Error: ' + (err.message || 'Could not link parent');
       } finally {
         linkParentBtn.disabled = false;
-        linkParentBtn.textContent = 'Save Parent Info';
       }
     });
   }
@@ -2491,12 +2350,7 @@ async function initStudentDashboard() {
     const tbody = document.querySelector('#recent-list');
     if (tbody) {
       if (myRecords.length === 0) {
-        tbody.innerHTML = renderEmptyTableState(
-          5,
-          '📋',
-          'No attendance submissions yet',
-          'Select an active lecture and use the camera on the left to submit your attendance.'
-        );
+        tbody.innerHTML = `<tr><td colspan="5" class="muted small">No attendance submissions yet. Use the camera on the left to submit your first attendance!</td></tr>`;
       } else {
         tbody.innerHTML = myRecords
           .slice(0, 8)
@@ -2618,12 +2472,7 @@ async function initStudentDashboard() {
       const logsTbody = document.querySelector('#student-classwise-logs-tbody');
       if (logsTbody) {
         if (filtered.length === 0) {
-          logsTbody.innerHTML = renderEmptyTableState(
-            7,
-            '🔍',
-            'No records found for this class',
-            'Try selecting "All Classes" to view records across all enrolled subjects.'
-          );
+          logsTbody.innerHTML = `<tr><td colspan="7" class="muted small">No attendance records found for this class.</td></tr>`;
         } else {
           logsTbody.innerHTML = filtered
             .map(
@@ -2717,12 +2566,7 @@ async function initStudentDashboard() {
       const dayLogsTbody = document.querySelector('#student-daywise-logs-tbody');
       if (dayLogsTbody) {
         if (filtered.length === 0) {
-          dayLogsTbody.innerHTML = renderEmptyTableState(
-            7,
-            '📅',
-            'No records found for this date',
-            `No attendance was logged for ${selectedDate || 'the selected date'}. Click "All Dates" to see complete records.`
-          );
+          dayLogsTbody.innerHTML = `<tr><td colspan="7" class="muted small">No attendance records found for ${selectedDate || 'the selected date'}. Click "Show All Dates" to view all history.</td></tr>`;
         } else {
           dayLogsTbody.innerHTML = filtered
             .map(
@@ -3120,10 +2964,8 @@ async function initStudentDashboard() {
         const scanLine = document.querySelector('#cam-scan-line');
         if (scanLine) scanLine.hidden = false;
         if (gpsOverlay) gpsOverlay.hidden = false;
-        openBtn.disabled = false;
-        openBtn.textContent = '⏹ Stop Camera';
+        openBtn.disabled = true;
         captureBtn.disabled = false;
-        captureBtn.innerHTML = '✓ 3. Submit Attendance';
 
         // Active Liveness Detection Anti-Spoofing Challenge HUD Loop
         const livenessHud = document.querySelector('#liveness-hud-overlay');
@@ -3194,10 +3036,8 @@ async function initStudentDashboard() {
         off.textContent = 'Camera access required for live face verification';
         oval.hidden = false;
         if (gpsOverlay) gpsOverlay.hidden = false;
-        openBtn.disabled = false;
-        openBtn.textContent = '📷 2. Start Camera';
-        captureBtn.disabled = true;
-        captureBtn.innerHTML = '✓ 3. Submit Attendance';
+        openBtn.disabled = true;
+        captureBtn.disabled = false;
         status.textContent = 'Please allow camera access so your face can be matched against your reference photo.';
       }
 
@@ -3235,9 +3075,8 @@ async function initStudentDashboard() {
       if (scanLine) scanLine.hidden = true;
       if (gpsOverlay) gpsOverlay.hidden = true;
       openBtn.disabled = false;
-      openBtn.textContent = '📷 2. Start Camera';
+      openBtn.textContent = '📷 Retake / Open camera';
       captureBtn.disabled = true;
-      captureBtn.innerHTML = '✓ 3. Submit Attendance';
     }
 
     async function captureAndVerify() {
@@ -3255,7 +3094,6 @@ async function initStudentDashboard() {
       status.textContent =
         'Verifying biometrics against reference portrait, evaluating liveness anti-spoof, and checking location geofence…';
       captureBtn.disabled = true;
-      captureBtn.innerHTML = '<span class="spinner-sm"></span> Verifying Face & GPS...';
 
       if (calFaceMatchBadgeEl) {
         calFaceMatchBadgeEl.innerHTML = `<strong>Face Recognition Status:</strong> <span class="badge warn">🧬 Scanning &amp; matching live face against enrolled portrait…</span>`;
@@ -3340,8 +3178,6 @@ async function initStudentDashboard() {
         downloadLink.href = stampedDataUrl;
         downloadLink.hidden = false;
       }
-      captureBtn.disabled = true;
-      captureBtn.innerHTML = '<span class="spinner-sm"></span> Recording Attendance...';
 
       try {
         const res = await apiRequest('/api/attendance', {
@@ -3370,9 +3206,6 @@ async function initStudentDashboard() {
         status.innerHTML = `<span class="badge ${rec.badgeType}">${rec.status}</span> · Face: <strong>${faceResult.score}%</strong> · Anti-Spoof Liveness: <strong>${finalLivenessOk ? 'Passed (98.6%)' : 'Failed'}</strong> · GPS: <strong>${rec.distance}</strong> · 📍 <strong>${rec.locationName}</strong>${notifHtml}`;
         allAttendance.unshift(rec);
         renderStudentAttendance(allAttendance);
-        captureBtn.disabled = true;
-        captureBtn.innerHTML = '✓ Attendance Submitted';
-        openBtn.textContent = '📷 Retake / Check In Again';
         if (window.showToast) {
           const toastMsg = notif && notif.dispatched
             ? `Attendance ${rec.status}! 📱 Parent alerted on ${notif.recipient}.`
@@ -3380,9 +3213,6 @@ async function initStudentDashboard() {
           showToast(toastMsg, rec.badgeType === 'bad' ? 'error' : 'success');
         }
       } catch (err) {
-        captureBtn.disabled = false;
-        captureBtn.innerHTML = '✓ 3. Submit Attendance';
-        openBtn.textContent = '📷 2. Start Camera';
         status.textContent = 'Check-in failed: ' + err.message;
         if (window.showToast) {
           showToast('Check-in failed: ' + err.message, 'error');
@@ -3390,13 +3220,7 @@ async function initStudentDashboard() {
       }
     }
 
-    openBtn.addEventListener('click', () => {
-      if (stream) {
-        stopCameraStreamOnly();
-      } else {
-        openCamera();
-      }
-    });
+    openBtn.addEventListener('click', openCamera);
     captureBtn.addEventListener('click', captureAndVerify);
     window.addEventListener('beforeunload', () => {
       stopCameraStreamOnly();
@@ -3570,17 +3394,9 @@ async function initFacultyDashboard() {
     const liveCount = document.querySelector('#live-count-label');
     if (liveCount) liveCount.textContent = `${attendance.length} total records`;
     if (liveTbody) {
-      if (attendance.length === 0) {
-        liveTbody.innerHTML = renderEmptyTableState(
-          9,
-          '⚡',
-          'No check-ins recorded yet today',
-          'Live student arrivals and facial verifications will stream here in real time.'
-        );
-      } else {
-        liveTbody.innerHTML = attendance
-          .map(
-            (r) => `
+      liveTbody.innerHTML = attendance
+        .map(
+          (r) => `
         <tr>
           <td>${r.studentName}</td>
           <td>${r.rollNo}</td>
@@ -3593,11 +3409,10 @@ async function initFacultyDashboard() {
           <td><button class="btn danger sm" data-delete-attendance="${r.id}" type="button">Delete</button></td>
         </tr>
       `
-          )
-          .join('');
-        bindPhotoViewButtons(liveTbody, attendance);
-        bindDeleteAttendanceButtons(liveTbody);
-      }
+        )
+        .join('');
+      bindPhotoViewButtons(liveTbody, attendance);
+      bindDeleteAttendanceButtons(liveTbody);
     }
 
     // 4. Render Student Reference Face Photos Tab (Faculty)
@@ -3703,20 +3518,12 @@ async function initFacultyDashboard() {
     container.querySelectorAll('[data-delete-attendance]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const id = btn.dataset.deleteAttendance;
-        const confirmed = await confirmDialog({
-          title: 'Delete Attendance Entry',
-          message: 'Are you sure you want to delete this live attendance entry? This will permanently remove the record from all dashboards.',
-          confirmText: 'Delete Entry',
-          danger: true
-        });
-        if (!confirmed) return;
         btn.disabled = true;
         btn.textContent = 'Deleting…';
         try {
           await apiRequest(`/api/attendance/${id}`, { method: 'DELETE' });
           state.attendance = (state.attendance || []).filter((r) => r.id !== id);
           renderFacultyView();
-          showToast('Attendance record deleted', 'info');
         } catch (err) {
           btn.disabled = false;
           btn.textContent = 'Delete';
@@ -3743,15 +3550,6 @@ async function initFacultyDashboard() {
     const reportTbody = document.querySelector('#faculty-report-tbody');
     if (!reportTbody) return;
     const rows = getFilteredReportRows();
-    if (rows.length === 0) {
-      reportTbody.innerHTML = renderEmptyTableState(
-        10,
-        '📊',
-        'No attendance records match selected filters',
-        'Try adjusting your date range or selecting "All Classes" to view all records.'
-      );
-      return;
-    }
     reportTbody.innerHTML = rows
       .map(
         (r) => `
@@ -4032,13 +3830,7 @@ async function initParentDashboard() {
     const alertsListEl = document.querySelector('#parent-alerts-list');
     if (alertsListEl) {
       if (studentAlerts.length === 0) {
-        alertsListEl.innerHTML = `
-          <div class="empty-state">
-            <div class="empty-state-icon">🔔</div>
-            <div class="empty-state-title">No notifications yet</div>
-            <div class="empty-state-desc">Live SMS and WhatsApp alerts will appear here as ${activeStudent.name} checks in to lectures.</div>
-          </div>
-        `;
+        alertsListEl.innerHTML = `<div class="muted small">No check-in alerts recorded for ${activeStudent.name} yet.</div>`;
       } else {
         alertsListEl.innerHTML = studentAlerts
           .map(
@@ -4109,12 +3901,7 @@ async function initParentDashboard() {
 
     if (historyTbody) {
       if (filteredHistory.length === 0) {
-        historyTbody.innerHTML = renderEmptyTableState(
-          6,
-          '📋',
-          'No attendance records found',
-          `No records match the current filters for ${activeStudent.name}. Click "Show All" to reset filters.`
-        );
+        historyTbody.innerHTML = `<tr><td colspan="6" class="muted small">No attendance records match the selected filter for ${activeStudent.name}.</td></tr>`;
       } else {
         historyTbody.innerHTML = filteredHistory
           .map(
@@ -4329,15 +4116,7 @@ async function initAdminPortal() {
     // Users table
     const usersTbody = document.querySelector('#admin-users-tbody');
     if (usersTbody) {
-      if (users.length === 0) {
-        usersTbody.innerHTML = renderEmptyTableState(
-          6,
-          '👥',
-          'No institutional accounts registered',
-          'Use the "Add user" form above to create student, faculty, parent, or admin accounts.'
-        );
-      } else {
-        usersTbody.innerHTML = users
+      usersTbody.innerHTML = users
         .map((u) => {
           let relationHtml = '';
           if (u.role === 'student') {
@@ -4451,14 +4230,6 @@ async function initAdminPortal() {
       usersTbody.querySelectorAll('[data-delete-user]').forEach((btn) => {
         btn.addEventListener('click', async () => {
           const id = btn.dataset.deleteUser;
-          const targetUser = state.users.find((u) => u.id === id);
-          const confirmed = await confirmDialog({
-            title: 'Remove User Account',
-            message: `Are you sure you want to remove ${targetUser ? targetUser.name : 'this user'} (${targetUser ? targetUser.email : ''})? Their account credentials and portal access will be deleted.`,
-            confirmText: 'Remove User',
-            danger: true
-          });
-          if (!confirmed) return;
           try {
             await apiRequest(`/api/users/${id}`, { method: 'DELETE' });
             state.users = state.users.filter((u) => u.id !== id);
@@ -4516,17 +4287,9 @@ async function initAdminPortal() {
     // Classes table
     const classesTbody = document.querySelector('#admin-classes-tbody');
     if (classesTbody) {
-      if (classes.length === 0) {
-        classesTbody.innerHTML = renderEmptyTableState(
-          6,
-          '🏫',
-          'No classroom geofences configured',
-          'Add your first classroom location above to allow students to check in.'
-        );
-      } else {
-        classesTbody.innerHTML = classes
-          .map(
-            (c) => `
+      classesTbody.innerHTML = classes
+        .map(
+          (c) => `
         <tr>
           <td><strong>${c.name}</strong></td>
           <td>${c.room} · ${c.schedule || ''}</td>
@@ -4538,47 +4301,25 @@ async function initAdminPortal() {
           </td>
         </tr>
       `
-          )
-          .join('');
+        )
+        .join('');
 
-        classesTbody.querySelectorAll('[data-delete-class]').forEach((btn) => {
-          btn.addEventListener('click', async () => {
-            const id = btn.dataset.deleteClass;
-            const targetCls = state.classes.find((c) => c.id === id);
-            const confirmed = await confirmDialog({
-              title: 'Delete Classroom Geofence',
-              message: `Are you sure you want to delete ${targetCls ? targetCls.name : 'this class'} (${targetCls ? targetCls.room : ''})? Live attendance sessions for this class will be closed.`,
-              confirmText: 'Delete Classroom',
-              danger: true
-            });
-            if (!confirmed) return;
-            try {
-              await apiRequest(`/api/classes/${id}`, { method: 'DELETE' });
-              state.classes = state.classes.filter((c) => c.id !== id);
-              renderAdminAll();
-              showToast('Classroom geofence deleted', 'info');
-            } catch (err) {
-              showToast(err.message, 'error');
-            }
-          });
+      classesTbody.querySelectorAll('[data-delete-class]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const id = btn.dataset.deleteClass;
+          await apiRequest(`/api/classes/${id}`, { method: 'DELETE' });
+          state.classes = state.classes.filter((c) => c.id !== id);
+          renderAdminAll();
         });
-      }
+      });
     }
 
     // Logs table
     const logsTbody = document.querySelector('#admin-logs-tbody');
     if (logsTbody) {
-      if (logs.length === 0) {
-        logsTbody.innerHTML = renderEmptyTableState(
-          10,
-          '📋',
-          'No attendance logs recorded',
-          'Student check-in submissions and GPS verification snapshots will appear here.'
-        );
-      } else {
-        logsTbody.innerHTML = logs
-          .map(
-            (r) => `
+      logsTbody.innerHTML = logs
+        .map(
+          (r) => `
         <tr>
           <td>${r.displayDate || r.date}</td>
           <td>${r.time}</td>
@@ -4592,31 +4333,18 @@ async function initAdminPortal() {
           <td><button class="btn danger sm" data-delete-attendance="${r.id}" type="button">Delete</button></td>
         </tr>
       `
-          )
-          .join('');
-        bindPhotoViewButtons(logsTbody, logs);
+        )
+        .join('');
+      bindPhotoViewButtons(logsTbody, logs);
 
-        logsTbody.querySelectorAll('[data-delete-attendance]').forEach((btn) => {
-          btn.addEventListener('click', async () => {
-            const id = btn.dataset.deleteAttendance;
-            const confirmed = await confirmDialog({
-              title: 'Delete Attendance Log',
-              message: 'Are you sure you want to delete this student attendance log? This action is permanent and cannot be undone.',
-              confirmText: 'Delete Log',
-              danger: true
-            });
-            if (!confirmed) return;
-            try {
-              await apiRequest(`/api/attendance/${id}`, { method: 'DELETE' });
-              state.attendance = (state.attendance || []).filter((r) => r.id !== id);
-              renderAdminAll();
-              showToast('Attendance log deleted', 'info');
-            } catch (err) {
-              showToast(err.message, 'error');
-            }
-          });
+      logsTbody.querySelectorAll('[data-delete-attendance]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const id = btn.dataset.deleteAttendance;
+          await apiRequest(`/api/attendance/${id}`, { method: 'DELETE' });
+          state.attendance = (state.attendance || []).filter((r) => r.id !== id);
+          renderAdminAll();
         });
-      }
+      });
     }
   }
 

@@ -37,47 +37,31 @@
 </header>
 
 <main class="wrap" data-tabs>
-  <div class="page-header row between">
+  <div class="row between">
     <div>
       <h1>Institution Admin Portal</h1>
       <p class="muted small" id="admin-meta">Manage students, faculty, parents, classes, and attendance records</p>
     </div>
-    <span class="badge ok">Institutional Admin</span>
+    <span class="badge info">Full Institutional Access</span>
   </div>
 
-  <div class="grid grid-4 mt stats-row">
-    <div class="panel stat-card">
-      <div class="stat-header"><span class="stat-label-title">Accounts</span></div>
-      <div class="stat" id="admin-count-users">0</div>
-      <div class="muted small">registered users</div>
-    </div>
-    <div class="panel stat-card">
-      <div class="stat-header"><span class="stat-label-title">Students</span></div>
-      <div class="stat" id="admin-count-students">0</div>
-      <div class="muted small">enrolled students</div>
-    </div>
-    <div class="panel stat-card">
-      <div class="stat-header"><span class="stat-label-title">Classes</span></div>
-      <div class="stat" id="admin-count-classes">0</div>
-      <div class="muted small">active geofences</div>
-    </div>
-    <div class="panel stat-card">
-      <div class="stat-header"><span class="stat-label-title">Logs</span></div>
-      <div class="stat" id="admin-count-logs">0</div>
-      <div class="muted small">recorded check-ins</div>
-    </div>
+  <div class="grid grid-4 mt">
+    <div class="panel"><div class="stat" id="admin-count-users">0</div><div class="muted small">registered accounts</div></div>
+    <div class="panel"><div class="stat" id="admin-count-students">0</div><div class="muted small">enrolled students</div></div>
+    <div class="panel"><div class="stat" id="admin-count-classes">0</div><div class="muted small">active classes</div></div>
+    <div class="panel"><div class="stat" id="admin-count-logs">0</div><div class="muted small">attendance logs</div></div>
   </div>
 
-  <div class="tabs mt" role="tablist" aria-label="Admin Views">
-    <button class="active" data-target="users" type="button" role="tab" aria-selected="true">👥 Users &amp; Accounts</button>
-    <button data-target="classes" type="button" role="tab" aria-selected="false">🏫 Classes &amp; Geofences</button>
-    <button data-target="logs" type="button" role="tab" aria-selected="false">📋 Attendance Logs</button>
-    <button data-target="oauth" type="button" role="tab" aria-selected="false">🔐 Google OAuth</button>
-    <button data-target="enterprise" type="button" role="tab" aria-selected="false">💬 Parent Alerts (Twilio)</button>
+  <div class="tabs mt">
+    <button class="active" data-target="users" type="button">Users &amp; Accounts</button>
+    <button data-target="classes" type="button">Classes &amp; Geofences</button>
+    <button data-target="logs" type="button">Attendance Logs</button>
+    <button data-target="oauth" type="button">Google OAuth Setup</button>
+    <button data-target="enterprise" type="button">💬 Parent Notifications (Twilio)</button>
   </div>
 
   <!-- TAB 1: Users & Accounts -->
-  <section class="tabpanel" data-tab="users" role="tabpanel" aria-label="Users and Accounts">
+  <section class="tabpanel" data-tab="users">
     <div class="panel mb">
       <h3>Add institutional user (Student / Faculty / Parent / Admin)</h3>
       <p class="muted small">Passwords are encrypted with bcrypt. For students, you can also upload a reference portrait photo for live face recognition check-ins.</p>
@@ -148,7 +132,7 @@
   </section>
 
   <!-- TAB 2: Classes -->
-  <section class="tabpanel" data-tab="classes" role="tabpanel" aria-label="Classes and Geofences" hidden>
+  <section class="tabpanel" data-tab="classes" hidden>
     <div class="panel mb">
       <h3>Add a classroom</h3>
       <form id="admin-add-class-form" class="mt">
@@ -178,7 +162,7 @@
   </section>
 
   <!-- TAB 3: Attendance Logs -->
-  <section class="tabpanel" data-tab="logs" role="tabpanel" aria-label="Attendance Logs" hidden>
+  <section class="tabpanel" data-tab="logs" hidden>
     <div class="panel">
       <h3>All institutional attendance logs</h3>
       <div class="table-wrap mt">
@@ -191,7 +175,7 @@
   </section>
 
   <!-- TAB 4: Google OAuth & Domain Restriction Settings -->
-  <section class="tabpanel" data-tab="oauth" role="tabpanel" aria-label="Google OAuth Settings" hidden>
+  <section class="tabpanel" data-tab="oauth" hidden>
     <div class="panel mb">
       <h3>College Email Domain Restriction</h3>
       <p class="muted small">Only users with an email ending in these institutional domains (or users manually added by the Admin in Tab 1) are allowed to sign in via Email or Google Sign-In. Personal <code>@gmail.com</code> or external accounts are automatically blocked.</p>
@@ -220,7 +204,7 @@
   </section>
 
   <!-- TAB 5: Automated Parent Notifications (Twilio SMS & WhatsApp) -->
-  <section class="tabpanel" data-tab="enterprise" role="tabpanel" aria-label="Parent Notifications" hidden>
+  <section class="tabpanel" data-tab="enterprise" hidden>
     <!-- Automated SMS / WhatsApp Parent Notifications (Twilio) -->
     <div class="panel mb">
       <div class="row between">

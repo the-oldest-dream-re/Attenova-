@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <meta name="mobile-web-app-capable" content="yes" />
-<title>Alert Preferences — Attenova</title>
+<title>Alert settings — Attenova</title>
 <meta name="description" content="Choose which attendance alerts you want to receive about your child." />
 <link rel="manifest" href="manifest.json" />
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
@@ -23,11 +23,10 @@
   <div class="bar">
     <a class="logo" href="parent.html">
       <span class="mark">A</span>
-      <div><div class="name">Attenova</div><div class="tag">Parent Portal</div></div>
+      <div><div class="name">Attenova</div><div class="tag">face + location verified</div></div>
     </a>
     <nav id="app-nav">
-      <a href="parent.html">Dashboard</a>
-      <a href="preferences.html" aria-current="page">Preferences</a>
+      <a href="parent.html">Parent</a>
       <button class="btn-theme-toggle" id="theme-toggle-btn" type="button" aria-label="Toggle theme" title="Toggle dark/light mode"><span class="theme-icon-light">☀️</span><span class="theme-icon-dark">🌙</span></button>
       <button class="btn-header install-btn" id="pwa-install-btn" type="button" hidden>Install App</button>
     </nav>
@@ -35,57 +34,52 @@
 </header>
 
 <main class="wrap">
-  <div class="page-header row between">
-    <div>
-      <h1>Alert Notification Preferences</h1>
-      <p class="muted small">Customize which check-in events and channels deliver real-time notifications to your phone.</p>
-    </div>
-    <a class="btn secondary sm" href="parent.html">&larr; Back to Dashboard</a>
-  </div>
+  <h1>Alert settings</h1>
+  <p class="muted small">Pick the moments you want to hear about. Changes are saved to your account and apply to future check-ins.</p>
 
-  <form class="panel mt" id="pref-form" style="max-width:720px">
+  <form class="panel mt" id="pref-form">
     <div class="switch-row">
-      <div><strong>Successful Check-In</strong><div class="muted small">Face verification and classroom location matched.</div></div>
+      <div><strong>Successful check-in</strong><div class="muted small">Face, liveness, and location all verified.</div></div>
       <label class="switch"><input id="pref-ok" type="checkbox" checked /><span></span></label>
     </div>
     <div class="switch-row">
-      <div><strong>Late Check-In</strong><div class="muted small">Marked present after class session started.</div></div>
+      <div><strong>Late check-in</strong><div class="muted small">Marked present after the class started.</div></div>
       <label class="switch"><input id="pref-late" type="checkbox" checked /><span></span></label>
     </div>
     <div class="switch-row">
-      <div><strong>Wrong Location Attempt</strong><div class="muted small">Check-in attempted from outside classroom boundaries.</div></div>
+      <div><strong>Wrong location</strong><div class="muted small">Check-in tried from outside the classroom area.</div></div>
       <label class="switch"><input id="pref-outside" type="checkbox" checked /><span></span></label>
     </div>
     <div class="switch-row">
-      <div><strong>Face or Liveness Failed</strong><div class="muted small">Face scan or anti-spoofing challenge did not match reference photo.</div></div>
+      <div><strong>Face or Liveness not matched</strong><div class="muted small">The face scan or anti-spoofing challenge failed.</div></div>
       <label class="switch"><input id="pref-face" type="checkbox" checked /><span></span></label>
     </div>
 
-    <hr style="border:0;border-top:1px solid var(--border);margin:20px 0" />
+    <hr style="border:0;border-top:1px solid var(--border);margin:16px 0" />
 
     <div class="switch-row">
-      <div><strong>📲 WhatsApp Notifications (Twilio)</strong><div class="muted small">Receive immediate attendance alerts via WhatsApp message.</div></div>
+      <div><strong>📲 WhatsApp Notifications (Twilio)</strong><div class="muted small">Get immediate attendance alerts via WhatsApp message.</div></div>
       <label class="switch"><input id="pref-whatsapp" type="checkbox" checked /><span></span></label>
     </div>
     <div class="switch-row">
-      <div><strong>💬 SMS Text Alerts (Twilio)</strong><div class="muted small">Receive automated SMS fallback alerts when WhatsApp is unread.</div></div>
+      <div><strong>💬 SMS Text Alerts (Twilio)</strong><div class="muted small">Receive automated SMS messages for critical attendance events.</div></div>
       <label class="switch"><input id="pref-sms" type="checkbox" checked /><span></span></label>
     </div>
 
-    <div class="field mt" style="max-width:380px">
-      <label for="pref-phone">Parent Phone Number (E.164 with country code)</label>
+    <div class="field mt" style="max-width:360px">
+      <label for="pref-phone">Parent Phone Number for WhatsApp / SMS (e.g. +919876543210)</label>
       <input id="pref-phone" placeholder="+919876543210" value="+919876543210" />
     </div>
 
-    <div class="row mt" style="gap:12px;margin-top:24px">
-      <button class="btn btn-submit-main" type="submit">Save Preferences</button>
-      <a class="btn secondary" href="parent.html">Cancel</a>
+    <div class="row mt">
+      <button class="btn" type="submit">Save settings</button>
+      <a class="btn ghost" href="parent.html">Back to overview</a>
       <span class="small muted" id="pref-status"></span>
     </div>
   </form>
 </main>
 
-<footer class="app">Attenova · Parent Portal</footer>
+<footer class="app">Attenova · parent settings</footer>
 <script src="js/app.js"></script>
 </body>
 </html>

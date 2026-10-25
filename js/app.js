@@ -9,16 +9,19 @@ function showToast(message, type = 'info', duration = 3500) {
     container = document.createElement('div');
     container.id = 'attenova-toast-container';
     container.className = 'toast-container';
+    container.setAttribute('aria-live', 'polite');
+    container.setAttribute('aria-atomic', 'true');
     document.body.appendChild(container);
   }
 
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
+  toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
   const icon = type === 'success' ? '✓' : type === 'error' ? '✕' : type === 'warning' ? '⚠️' : 'ℹ️';
   toast.innerHTML = `
     <span class="toast-icon">${icon}</span>
     <span class="toast-msg">${message}</span>
-    <button type="button" class="toast-close" aria-label="Close">&times;</button>
+    <button type="button" class="toast-close" aria-label="Close notification">&times;</button>
   `;
   container.appendChild(toast);
 
@@ -1915,15 +1918,31 @@ if (pwaInstallBtn) {
   });
 }
 
-// ---- Tabs -------------------------------------------------------------
+// ---- Accessible Keyboard & ARIA Tabs --------------------------------
 document.querySelectorAll('[data-tabs]').forEach((group) => {
-  const buttons = group.querySelectorAll('.tabs button');
-  buttons.forEach((btn) => {
+  const buttons = Array.from(group.querySelectorAll('.tabs button'));
+  buttons.forEach((btn, index) => {
+    btn.setAttribute('role', 'tab');
+    btn.setAttribute('aria-selected', btn.classList.contains('active') ? 'true' : 'false');
     btn.addEventListener('click', () => {
-      buttons.forEach((b) => b.classList.toggle('active', b === btn));
+      buttons.forEach((b) => {
+        const isActive = b === btn;
+        b.classList.toggle('active', isActive);
+        b.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      });
       group.querySelectorAll('.tabpanel').forEach((p) => {
         p.hidden = p.dataset.tab !== btn.dataset.target;
       });
+    });
+    btn.addEventListener('keydown', (e) => {
+      let nextIndex = null;
+      if (e.key === 'ArrowRight') nextIndex = (index + 1) % buttons.length;
+      if (e.key === 'ArrowLeft') nextIndex = (index - 1 + buttons.length) % buttons.length;
+      if (nextIndex !== null) {
+        e.preventDefault();
+        buttons[nextIndex].focus();
+        buttons[nextIndex].click();
+      }
     });
   });
 });

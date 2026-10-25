@@ -24,7 +24,7 @@
   /* Secondary & Muted Neutrals */
   --secondary: #f1f5f9;
   --muted: #f1f5f9;
-  --muted-foreground: #64748b;
+  --muted-foreground: #475569;
 
   /* Accent & Status Colors */
   --accent: #6366f1;
@@ -79,9 +79,28 @@
   border-color: var(--border);
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 html, body {
   overflow-x: hidden;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Accessible Keyboard Focus Rings (WCAG 2.1 AA) */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 body {
@@ -116,6 +135,10 @@ main.wrap {
   width: 100%;
 }
 
+.page-header {
+  margin-bottom: 24px;
+}
+
 h1, h2, h3, h4 {
   font-family: "Outfit", "Sora", "Plus Jakarta Sans", system-ui, sans-serif;
   letter-spacing: -0.025em;
@@ -124,9 +147,9 @@ h1, h2, h3, h4 {
   font-weight: 700;
 }
 
-h1 { font-size: 1.75rem; line-height: 1.2; }
-h2 { font-size: 1.3rem; line-height: 1.25; }
-h3 { font-size: 1.05rem; line-height: 1.3; }
+h1 { font-size: clamp(1.5rem, 3.2vw, 1.95rem); line-height: 1.2; letter-spacing: -0.03em; }
+h2 { font-size: clamp(1.2rem, 2.5vw, 1.45rem); line-height: 1.25; letter-spacing: -0.025em; }
+h3 { font-size: 1.08rem; line-height: 1.3; letter-spacing: -0.02em; }
 
 a {
   color: var(--primary);

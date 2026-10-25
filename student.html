@@ -79,14 +79,14 @@
   </div>
 
   <!-- Student Dashboard Navigation Tabs -->
-  <div class="tabs mt">
-    <button class="active" data-target="submit" type="button">📸 Mark Attendance</button>
-    <button data-target="classwise" type="button">📚 Subject Breakdown</button>
-    <button data-target="daywise" type="button">📅 Daily Log</button>
+  <div class="tabs mt" role="tablist" aria-label="Student Views">
+    <button class="active" data-target="submit" type="button" role="tab" aria-selected="true">📸 Mark Attendance</button>
+    <button data-target="classwise" type="button" role="tab" aria-selected="false">📚 Subject Breakdown</button>
+    <button data-target="daywise" type="button" role="tab" aria-selected="false">📅 Daily Log</button>
   </div>
 
   <!-- TAB 1: Submit Attendance -->
-  <section class="tabpanel" data-tab="submit">
+  <section class="tabpanel" data-tab="submit" role="tabpanel" aria-label="Mark Attendance">
     <div class="grid grid-2">
       <div class="panel checkin-panel">
         <div class="checkin-header mb">
@@ -249,7 +249,7 @@
   </section>
 
   <!-- TAB 2: Class-Wise Attendance -->
-  <section class="tabpanel" data-tab="classwise" hidden>
+  <section class="tabpanel" data-tab="classwise" role="tabpanel" aria-label="Subject Breakdown" hidden>
     <div class="panel mb">
       <div class="row between mb">
         <div>
@@ -308,7 +308,7 @@
   </section>
 
   <!-- TAB 3: Day-Wise Attendance -->
-  <section class="tabpanel" data-tab="daywise" hidden>
+  <section class="tabpanel" data-tab="daywise" role="tabpanel" aria-label="Daily Log" hidden>
     <div class="panel mb">
       <div class="row between mb">
         <div>

@@ -68,8 +68,8 @@
 
       <form id="login-form">
         <div class="field">
-          <label>Select Workspace</label>
-          <div class="role-pills">
+          <label id="role-select-label">Select Workspace</label>
+          <div class="role-pills" role="radiogroup" aria-labelledby="role-select-label">
             <input type="radio" id="role-student" name="role" value="student" checked />
             <label for="role-student">Student</label>
             <input type="radio" id="role-faculty" name="role" value="faculty" />

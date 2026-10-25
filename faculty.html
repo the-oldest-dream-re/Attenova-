@@ -41,14 +41,14 @@
     </div>
   </div>
 
-  <div class="tabs mt">
-    <button class="active" data-target="classes" type="button">📚 My Classes</button>
-    <button data-target="live" type="button">⚡ Live Check-Ins</button>
-    <button data-target="faces" type="button">👤 Student Face Roster</button>
-    <button data-target="reports" type="button">📊 Reports &amp; Export</button>
+  <div class="tabs mt" role="tablist" aria-label="Faculty Views">
+    <button class="active" data-target="classes" type="button" role="tab" aria-selected="true">📚 My Classes</button>
+    <button data-target="live" type="button" role="tab" aria-selected="false">⚡ Live Check-Ins</button>
+    <button data-target="faces" type="button" role="tab" aria-selected="false">👤 Student Face Roster</button>
+    <button data-target="reports" type="button" role="tab" aria-selected="false">📊 Reports &amp; Export</button>
   </div>
 
-  <section class="tabpanel" data-tab="classes">
+  <section class="tabpanel" data-tab="classes" role="tabpanel" aria-label="My Classes">
     <div class="grid grid-2" id="classes-grid"></div>
 
     <div class="panel mt">
@@ -92,7 +92,7 @@
     </div>
   </section>
 
-  <section class="tabpanel" data-tab="live" hidden>
+  <section class="tabpanel" data-tab="live" role="tabpanel" aria-label="Live Check-Ins" hidden>
     <div class="panel mb">
       <h3>Record Manual Attendance</h3>
       <p class="muted small mb">Add or update attendance status for a student manually.</p>
@@ -135,7 +135,7 @@
     </div>
   </section>
 
-  <section class="tabpanel" data-tab="faces" hidden>
+  <section class="tabpanel" data-tab="faces" role="tabpanel" aria-label="Student Face Roster" hidden>
     <div class="panel">
       <div class="row between mb">
         <div>
@@ -163,7 +163,7 @@
     </div>
   </section>
 
-  <section class="tabpanel" data-tab="reports" hidden>
+  <section class="tabpanel" data-tab="reports" role="tabpanel" aria-label="Reports and Export" hidden>
     <div class="panel">
       <div class="row between mb">
         <div>

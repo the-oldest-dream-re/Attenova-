@@ -1232,16 +1232,42 @@ input:focus, select:focus {
 /* ---- Modern Data Tables ----------------------------------------------- */
 .table-wrap {
   overflow-x: auto;
+  overflow-y: auto;
+  max-height: 460px;
   -webkit-overflow-scrolling: touch;
   max-width: 100%;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--card);
+  position: relative;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(99, 102, 241, 0.45) var(--surface-2);
+}
+
+.table-wrap::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.table-wrap::-webkit-scrollbar-track {
+  background: var(--surface-2);
+  border-radius: 999px;
+}
+
+.table-wrap::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.4);
+  border-radius: 999px;
+  border: 2px solid var(--card);
+}
+
+.table-wrap::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
 }
 
 table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: 0.87rem;
 }
 
@@ -1262,6 +1288,9 @@ tbody tr:hover {
 }
 
 th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   background: var(--surface-2);
   font-size: 0.73rem;
   font-weight: 700;
@@ -1270,6 +1299,7 @@ th {
   color: var(--muted-foreground);
   white-space: nowrap;
   border-bottom: 1px solid var(--border);
+  box-shadow: 0 1px 0 var(--border);
 }
 
 /* ---- Alerts & Notifications ------------------------------------------- */
@@ -1798,6 +1828,11 @@ footer.app {
     padding: 9px 12px;
     font-size: 0.82rem;
     text-align: center;
+  }
+
+  /* Mobile Scrollable Tables */
+  .table-wrap {
+    max-height: 380px;
   }
 
   /* Mobile Portrait Camera Optimization */

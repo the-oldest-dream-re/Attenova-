@@ -2353,7 +2353,7 @@ async function initStudentDashboard() {
         tbody.innerHTML = `<tr><td colspan="5" class="muted small">No attendance submissions yet. Use the camera on the left to submit your first attendance!</td></tr>`;
       } else {
         tbody.innerHTML = myRecords
-          .slice(0, 8)
+          .slice(0, 50)
           .map(
             (r) => `
             <tr>

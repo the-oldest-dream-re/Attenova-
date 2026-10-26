@@ -64,6 +64,159 @@ function normalizeRecordDateTime(r) {
 }
 window.normalizeRecordDateTime = normalizeRecordDateTime;
 
+// Schedule Time-Window Parser & Status Evaluator
+function parseScheduleTimeWindow(scheduleStr) {
+  if (!scheduleStr || typeof scheduleStr !== 'string') return null;
+  const timeRegex = /\b(\d{1,2}):(\d{2})(?:\s*([ap]\.?m\.?))?\b/gi;
+  const matches = [...scheduleStr.matchAll(timeRegex)];
+  if (matches.length < 2) return null;
+
+  function toMinutes(match) {
+    let h = parseInt(match[1], 10);
+    const m = parseInt(match[2], 10);
+    const ampm = match[3] ? match[3].toLowerCase().replace(/\./g, '') : null;
+    if (ampm === 'pm' && h < 12) h += 12;
+    if (ampm === 'am' && h === 12) h = 0;
+    return h * 60 + m;
+  }
+
+  const startMinutes = toMinutes(matches[0]);
+  const endMinutes = toMinutes(matches[1]);
+  return { startMinutes, endMinutes };
+}
+
+function getCampusMinutes(date = new Date(), timezone = 'Asia/Kolkata') {
+  try {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: timezone,
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: false
+    }).formatToParts(date);
+    let h = 0, m = 0;
+    for (const p of parts) {
+      if (p.type === 'hour') h = parseInt(p.value, 10);
+      if (p.type === 'minute') m = parseInt(p.value, 10);
+    }
+    if (h === 24) h = 0;
+    return h * 60 + m;
+  } catch {
+    return date.getHours() * 60 + date.getMinutes();
+  }
+}
+
+function getClassScheduleStatus(cls, now = new Date(), timezone = 'Asia/Kolkata') {
+  if (!cls) {
+    return {
+      isOpen: false,
+      isScheduledNow: false,
+      status: 'closed',
+      badgeLabel: 'No active session',
+      badgeType: '',
+      buttonLabel: 'Start session',
+      reason: 'No class selected.'
+    };
+  }
+
+  const timeWindow = parseScheduleTimeWindow(cls.schedule);
+  const currentMinutes = getCampusMinutes(now, timezone);
+
+  // If faculty explicitly manually started session (force live override)
+  if (cls.manualLive === true) {
+    return {
+      isOpen: true,
+      isScheduledNow: false,
+      isManualOverride: true,
+      status: 'live-override',
+      badgeLabel: 'Live · Force Started',
+      badgeType: 'ok',
+      buttonLabel: 'End session',
+      reason: 'Faculty opened this session for live check-in.'
+    };
+  }
+
+  // If faculty explicitly manually stopped an active session early
+  if (cls.manualStopped === true) {
+    return {
+      isOpen: false,
+      isScheduledNow: false,
+      isManualOverride: true,
+      status: 'stopped-early',
+      badgeLabel: 'Closed early by faculty',
+      badgeType: 'warn',
+      buttonLabel: 'Resume session',
+      reason: 'Faculty paused or ended this session early.'
+    };
+  }
+
+  if (!timeWindow) {
+    const isLive = Boolean(cls.live);
+    return {
+      isOpen: isLive,
+      isScheduledNow: isLive,
+      status: isLive ? 'in-progress' : 'closed',
+      badgeLabel: isLive ? 'Live session running' : 'No session running',
+      badgeType: isLive ? 'ok' : '',
+      buttonLabel: isLive ? 'End session' : 'Start session',
+      reason: isLive ? 'Session is live for attendance.' : 'No active session.'
+    };
+  }
+
+  const { startMinutes, endMinutes } = timeWindow;
+
+  const formatMins = (mins) => {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  };
+
+  const startStr = formatMins(startMinutes);
+  const endStr = formatMins(endMinutes);
+
+  // Check if current time is within schedule (with 2 min arrival grace)
+  if (currentMinutes >= (startMinutes - 2) && currentMinutes < endMinutes) {
+    const remainingMins = endMinutes - currentMinutes;
+    return {
+      isOpen: true,
+      isScheduledNow: true,
+      status: 'in-progress',
+      badgeLabel: `Live · In Session (${startStr} – ${endStr})`,
+      badgeType: 'ok',
+      buttonLabel: 'End session early',
+      reason: `Class is in session. Check-in open until ${endStr} (${remainingMins} min remaining).`
+    };
+  }
+
+  if (currentMinutes < startMinutes) {
+    const diffMins = startMinutes - currentMinutes;
+    const timeUntilStr =
+      diffMins >= 60
+        ? `Starts in ${Math.floor(diffMins / 60)}h ${diffMins % 60 ? (diffMins % 60) + 'm' : ''}`.trim()
+        : `Starts in ${diffMins} min`;
+
+    return {
+      isOpen: false,
+      isScheduledNow: false,
+      status: 'upcoming',
+      badgeLabel: `Scheduled: ${startStr} – ${endStr} (${timeUntilStr})`,
+      badgeType: 'info',
+      buttonLabel: 'Start session early',
+      reason: `Class starts at ${startStr}. Check-in opens during scheduled class hours.`
+    };
+  }
+
+  return {
+    isOpen: false,
+    isScheduledNow: false,
+    status: 'ended',
+    badgeLabel: `Ended at ${endStr} (${startStr} – ${endStr})`,
+    badgeType: '',
+    buttonLabel: 'Start extra session',
+    reason: `Class ended at ${endStr}. Check-in is closed for this lecture.`
+  };
+}
+window.getClassScheduleStatus = getClassScheduleStatus;
+
 // ---- Theme Engine (Dark / Light SaaS Switcher) ------------------------
 function initThemeEngine() {
   const saved = localStorage.getItem('attenova-theme');
@@ -1783,7 +1936,18 @@ function handleOfflineFallback(path, options) {
   if (path.endsWith('/toggle-session') && method === 'POST') {
     const id = path.split('/')[3];
     const cls = db.classes.find((c) => c.id === id);
-    if (cls) cls.live = !cls.live;
+    if (cls) {
+      const currentStatus = getClassScheduleStatus(cls, new Date());
+      if (currentStatus.isOpen) {
+        cls.manualStopped = true;
+        cls.manualLive = false;
+        cls.live = false;
+      } else {
+        cls.manualStopped = false;
+        cls.manualLive = true;
+        cls.live = true;
+      }
+    }
     saveLocalDB(db);
     return { classItem: cls };
   }
@@ -1820,11 +1984,16 @@ function handleOfflineFallback(path, options) {
     const allowedRadius = Number(cls.radius || 60);
     const distanceMeters = calculateDistanceMeters(finalLat, finalLng, classLat, classLng);
 
+    const schedStatus = getClassScheduleStatus(cls, now);
+
     let status = 'Present';
     let badgeType = 'ok';
     if (body.manualStatus) {
       status = body.manualStatus;
       badgeType = status === 'Present' ? 'ok' : status === 'Late' ? 'warn' : 'bad';
+    } else if (!schedStatus.isOpen) {
+      status = `Rejected — Outside scheduled class time (${cls.schedule || 'closed'})`;
+      badgeType = 'bad';
     } else if (body.faceMatched === false) {
       const pctLabel = typeof body.faceScore === 'number' ? ` (${body.faceScore}% match)` : '';
       status = `Rejected — Face not matched${pctLabel}`;
@@ -2302,7 +2471,7 @@ async function initStudentDashboard() {
   function getSelectedClass() {
     return (
       classes.find((c) => classSelect && c.id === classSelect.value) ||
-      classes.find((c) => c.live) ||
+      classes.find((c) => getClassScheduleStatus(c).isOpen) ||
       classes[0]
     );
   }
@@ -2310,20 +2479,34 @@ async function initStudentDashboard() {
   function updateSelectedClassHeader() {
     const cls = getSelectedClass();
     if (!cls) return;
+    const s = getClassScheduleStatus(cls);
     titleEl.textContent = `Check in to ${cls.name}`;
-    metaEl.textContent = `${cls.schedule || '09:00 – 10:00'} · ${cls.room} · ${
-      cls.live ? 'session is live' : 'no live session'
-    }`;
+    metaEl.innerHTML = `
+      <span class="badge ${s.badgeType}" style="display:inline-flex;align-items:center;gap:6px;margin-right:6px">
+        ${s.isOpen ? '<span class="telemetry-pulse-dot" style="width:7px;height:7px"></span>' : ''}
+        ${s.badgeLabel}
+      </span>
+      <span>${cls.room} · ${cls.schedule || 'Scheduled'} · Radius ${cls.radius || 60}m</span>
+    `;
+
+    const camStatus = document.querySelector('#cam-status');
+    if (camStatus) {
+      if (!s.isOpen) {
+        camStatus.innerHTML = `<span class="text-danger" style="font-weight:600">⚠️ Attendance Window Closed:</span> ${cls.name} is scheduled for <strong>${cls.schedule || 'another time'}</strong>. Students can only submit attendance during scheduled lecture hours.`;
+      } else {
+        camStatus.innerHTML = `🟢 <strong>Lecture in session (${cls.schedule}).</strong> Check-in is active — align your face and tap submit.`;
+      }
+    }
   }
 
   if (classSelect) {
     classSelect.innerHTML = classes
-      .map(
-        (c) =>
-          `<option value="${c.id}" ${c.live ? 'selected' : ''}>${c.name} (${c.room}) ${
-            c.live ? '— LIVE' : ''
-          }</option>`
-      )
+      .map((c) => {
+        const s = getClassScheduleStatus(c);
+        const icon = s.isOpen ? '🟢' : s.status === 'upcoming' ? '⏳' : '⏹';
+        const tag = s.isOpen ? 'LIVE NOW' : s.status === 'upcoming' ? 'UPCOMING' : 'CLOSED';
+        return `<option value="${c.id}" ${s.isOpen ? 'selected' : ''}>${icon} ${c.name} (${c.room}) — ${c.schedule || 'No schedule'} [${tag}]</option>`;
+      })
       .join('');
     classSelect.addEventListener('change', updateSelectedClassHeader);
     updateSelectedClassHeader();
@@ -3117,6 +3300,16 @@ async function initStudentDashboard() {
     }
 
     async function captureAndVerify() {
+      const cls = getSelectedClass();
+      const schedStatus = getClassScheduleStatus(cls);
+      if (!schedStatus.isOpen) {
+        status.innerHTML = `<span class="badge bad">Attendance Window Closed</span> <strong>${cls.name}</strong> is scheduled for <strong>${cls.schedule || 'another time'}</strong>. Students can only submit attendance while class is in session.`;
+        if (window.showToast) {
+          showToast(`Attendance closed: ${cls.name} is scheduled for ${cls.schedule || 'another time'}. Check in during lecture hours.`, 'warning', 5000);
+        }
+        return;
+      }
+
       if (!user || !user.facePhotoUrl) {
         status.innerHTML = `<span class="badge bad">Reference Photo Required</span> Please upload your <strong>Student Reference Face Photo</strong> (or tap <strong>"📸 Save from Camera"</strong>) in the box above so the system can scan and match your face.`;
         if (calFaceMatchBadgeEl) {
@@ -3396,27 +3589,36 @@ async function initFacultyDashboard() {
     const attendance = state.attendance || [];
     const students = (state.users || []).filter((u) => u.role === 'student');
 
-    // 1. Render Classes Grid
+    // 1. Render Classes Grid with Schedule Time-Window Status
     const grid = document.querySelector('#classes-grid');
     if (grid) {
       grid.innerHTML = classes
-        .map(
-          (c) => `
-        <div class="panel">
-          <h3>${c.name}</h3>
-          <p class="muted small">${c.room} · ${c.schedule || '09:00 – 10:00'} · radius ${c.radius} m</p>
-          <p class="gps-cell-coords">📍 ${formatCoords(c.lat, c.lng)}</p>
-          <div class="row between mt">
-            <span class="badge ${c.live ? 'ok' : ''}">${
-              c.live ? 'Live — students can check in now' : 'No session running'
-            }</span>
-            <button class="btn ${c.live ? 'accent' : ''}" data-toggle-class="${c.id}" type="button">
-              ${c.live ? 'End session' : 'Start session'}
+        .map((c) => {
+          const s = getClassScheduleStatus(c);
+          return `
+        <div class="panel class-card ${s.isOpen ? 'card-live' : ''}" style="${s.isOpen ? 'border-color: rgba(16,185,129,0.45); box-shadow: 0 4px 18px rgba(16,185,129,0.12);' : ''}">
+          <div class="row between" style="align-items:flex-start">
+            <div>
+              <h3 style="margin-bottom:4px">${c.name}</h3>
+              <p class="muted small">${c.room} · <strong>${c.schedule || '10:00 – 11:00'}</strong> · radius ${c.radius} m</p>
+            </div>
+            <span class="badge ${s.badgeType}" style="display:inline-flex;align-items:center;gap:6px">
+              ${s.isOpen ? '<span class="telemetry-pulse-dot" style="width:7px;height:7px"></span>' : ''}
+              ${s.badgeLabel}
+            </span>
+          </div>
+          <p class="gps-cell-coords" style="margin-top:6px">📍 ${formatCoords(c.lat, c.lng)}</p>
+          <div class="row between mt" style="align-items:center;gap:10px">
+            <div class="small muted" style="font-size:0.8rem">
+              ${s.reason}
+            </div>
+            <button class="btn ${s.isOpen ? 'accent' : 'secondary'} sm" data-toggle-class="${c.id}" type="button">
+              ${s.buttonLabel}
             </button>
           </div>
         </div>
-      `
-        )
+      `;
+        })
         .join('');
 
       grid.querySelectorAll('[data-toggle-class]').forEach((btn) => {
@@ -3746,6 +3948,14 @@ async function initFacultyDashboard() {
   }
 
   renderFacultyView();
+
+  const schedFacultyInterval = setInterval(() => {
+    if (currentPage === 'faculty') {
+      renderFacultyView();
+    } else {
+      clearInterval(schedFacultyInterval);
+    }
+  }, 30000);
 }
 
 // ---- Parent Dashboard Logic -------------------------------------------
@@ -4362,20 +4572,26 @@ async function initAdminPortal() {
     const classesTbody = document.querySelector('#admin-classes-tbody');
     if (classesTbody) {
       classesTbody.innerHTML = classes
-        .map(
-          (c) => `
+        .map((c) => {
+          const s = getClassScheduleStatus(c);
+          return `
         <tr>
           <td><strong>${c.name}</strong></td>
           <td>${c.room} · ${c.schedule || ''}</td>
           <td>${c.lat}, ${c.lng}</td>
           <td>${c.radius} m</td>
-          <td><span class="badge ${c.live ? 'ok' : ''}">${c.live ? 'Live' : 'Idle'}</span></td>
+          <td>
+            <span class="badge ${s.badgeType}" style="display:inline-flex;align-items:center;gap:5px">
+              ${s.isOpen ? '<span class="telemetry-pulse-dot" style="width:6px;height:6px"></span>' : ''}
+              ${s.isOpen ? 'Live · In Session' : s.status === 'upcoming' ? 'Upcoming' : 'Ended'}
+            </span>
+          </td>
           <td>
             <button class="btn danger sm" data-delete-class="${c.id}" type="button">Delete</button>
           </td>
         </tr>
-      `
-        )
+      `;
+        })
         .join('');
 
       classesTbody.querySelectorAll('[data-delete-class]').forEach((btn) => {

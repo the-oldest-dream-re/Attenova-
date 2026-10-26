@@ -102,6 +102,158 @@ function normalizeAttendanceRecord(r, defaultTimezone = 'Asia/Kolkata') {
   return r;
 }
 
+// Schedule Time-Window Parser & Status Evaluator
+function parseScheduleTimeWindow(scheduleStr) {
+  if (!scheduleStr || typeof scheduleStr !== 'string') return null;
+  const timeRegex = /\b(\d{1,2}):(\d{2})(?:\s*([ap]\.?m\.?))?\b/gi;
+  const matches = [...scheduleStr.matchAll(timeRegex)];
+  if (matches.length < 2) return null;
+
+  function toMinutes(match) {
+    let h = parseInt(match[1], 10);
+    const m = parseInt(match[2], 10);
+    const ampm = match[3] ? match[3].toLowerCase().replace(/\./g, '') : null;
+    if (ampm === 'pm' && h < 12) h += 12;
+    if (ampm === 'am' && h === 12) h = 0;
+    return h * 60 + m;
+  }
+
+  const startMinutes = toMinutes(matches[0]);
+  const endMinutes = toMinutes(matches[1]);
+  return { startMinutes, endMinutes };
+}
+
+function getCampusMinutes(date = new Date(), timezone = 'Asia/Kolkata') {
+  try {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: timezone,
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: false
+    }).formatToParts(date);
+    let h = 0, m = 0;
+    for (const p of parts) {
+      if (p.type === 'hour') h = parseInt(p.value, 10);
+      if (p.type === 'minute') m = parseInt(p.value, 10);
+    }
+    if (h === 24) h = 0;
+    return h * 60 + m;
+  } catch {
+    return date.getHours() * 60 + date.getMinutes();
+  }
+}
+
+function getClassScheduleStatus(cls, now = new Date(), timezone = 'Asia/Kolkata') {
+  if (!cls) {
+    return {
+      isOpen: false,
+      isScheduledNow: false,
+      status: 'closed',
+      badgeLabel: 'No active session',
+      badgeType: '',
+      buttonLabel: 'Start session',
+      reason: 'No class selected.'
+    };
+  }
+
+  const timeWindow = parseScheduleTimeWindow(cls.schedule);
+  const currentMinutes = getCampusMinutes(now, timezone);
+
+  // If faculty explicitly manually started session (force live override)
+  if (cls.manualLive === true) {
+    return {
+      isOpen: true,
+      isScheduledNow: false,
+      isManualOverride: true,
+      status: 'live-override',
+      badgeLabel: 'Live · Force Started',
+      badgeType: 'ok',
+      buttonLabel: 'End session',
+      reason: 'Faculty opened this session for live check-in.'
+    };
+  }
+
+  // If faculty explicitly manually stopped an active session early
+  if (cls.manualStopped === true) {
+    return {
+      isOpen: false,
+      isScheduledNow: false,
+      isManualOverride: true,
+      status: 'stopped-early',
+      badgeLabel: 'Closed early by faculty',
+      badgeType: 'warn',
+      buttonLabel: 'Resume session',
+      reason: 'Faculty paused or ended this session early.'
+    };
+  }
+
+  if (!timeWindow) {
+    const isLive = Boolean(cls.live);
+    return {
+      isOpen: isLive,
+      isScheduledNow: isLive,
+      status: isLive ? 'in-progress' : 'closed',
+      badgeLabel: isLive ? 'Live session running' : 'No session running',
+      badgeType: isLive ? 'ok' : '',
+      buttonLabel: isLive ? 'End session' : 'Start session',
+      reason: isLive ? 'Session is live for attendance.' : 'No active session.'
+    };
+  }
+
+  const { startMinutes, endMinutes } = timeWindow;
+
+  const formatMins = (mins) => {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  };
+
+  const startStr = formatMins(startMinutes);
+  const endStr = formatMins(endMinutes);
+
+  // Check if current time is within schedule (with 2 min arrival grace)
+  if (currentMinutes >= (startMinutes - 2) && currentMinutes < endMinutes) {
+    const remainingMins = endMinutes - currentMinutes;
+    return {
+      isOpen: true,
+      isScheduledNow: true,
+      status: 'in-progress',
+      badgeLabel: `Live · In Session (${startStr} – ${endStr})`,
+      badgeType: 'ok',
+      buttonLabel: 'End session early',
+      reason: `Class is in session. Check-in open until ${endStr} (${remainingMins} min remaining).`
+    };
+  }
+
+  if (currentMinutes < startMinutes) {
+    const diffMins = startMinutes - currentMinutes;
+    const timeUntilStr =
+      diffMins >= 60
+        ? `Starts in ${Math.floor(diffMins / 60)}h ${diffMins % 60 ? (diffMins % 60) + 'm' : ''}`.trim()
+        : `Starts in ${diffMins} min`;
+
+    return {
+      isOpen: false,
+      isScheduledNow: false,
+      status: 'upcoming',
+      badgeLabel: `Scheduled: ${startStr} – ${endStr} (${timeUntilStr})`,
+      badgeType: 'info',
+      buttonLabel: 'Start session early',
+      reason: `Class starts at ${startStr}. Check-in opens during scheduled class hours.`
+    };
+  }
+
+  return {
+    isOpen: false,
+    isScheduledNow: false,
+    status: 'ended',
+    badgeLabel: `Ended at ${endStr} (${startStr} – ${endStr})`,
+    badgeType: '',
+    buttonLabel: 'Start extra session',
+    reason: `Class ended at ${endStr}. Check-in is closed for this lecture.`
+  };
+}
+
 // ---- Public Config Endpoint (for Google Identity Services & PWA) ----
 app.get('/api/config', (req, res) => {
   const db = loadDB();
@@ -428,10 +580,19 @@ app.get('/api/auth/me', authenticateToken, (req, res) => {
 app.get('/api/data', authenticateToken, (req, res) => {
   const db = loadDB();
   const currentUser = db.users.find((u) => u.id === req.user.id);
+  const now = new Date();
+  const enrichedClasses = (db.classes || []).map((c) => {
+    const s = getClassScheduleStatus(c, now);
+    return {
+      ...c,
+      live: s.isOpen,
+      scheduleStatus: s
+    };
+  });
   res.json({
     currentUser: sanitizeUser(currentUser),
     users: db.users.map(sanitizeUser),
-    classes: db.classes,
+    classes: enrichedClasses,
     attendance: (db.attendance || []).map((r) => normalizeAttendanceRecord(r)),
     alerts: db.alerts
   });
@@ -660,15 +821,28 @@ app.post('/api/classes', authenticateToken, (req, res) => {
   res.status(201).json({ classItem: newClass });
 });
 
-// Toggle live session for a class
+// Toggle live session for a class (Manual Override / Force Start / End Early)
 app.post('/api/classes/:id/toggle-session', authenticateToken, (req, res) => {
   const db = loadDB();
   const cls = db.classes.find((c) => c.id === req.params.id);
   if (!cls) return res.status(404).json({ error: 'Class not found' });
 
-  cls.live = !cls.live;
+  const currentStatus = getClassScheduleStatus(cls, new Date());
+  if (currentStatus.isOpen) {
+    // Session is currently active/open -> faculty wants to end or pause it early
+    cls.manualStopped = true;
+    cls.manualLive = false;
+    cls.live = false;
+  } else {
+    // Session is currently closed/upcoming/ended -> faculty wants to start/resume it
+    cls.manualStopped = false;
+    cls.manualLive = true;
+    cls.live = true;
+  }
+
   saveDB(db);
-  res.json({ classItem: cls });
+  const updatedStatus = getClassScheduleStatus(cls, new Date());
+  res.json({ classItem: { ...cls, live: updatedStatus.isOpen, scheduleStatus: updatedStatus } });
 });
 
 // Delete a class
@@ -860,6 +1034,8 @@ app.post('/api/attendance', authenticateToken, (req, res) => {
     }
   }
 
+  const schedStatus = getClassScheduleStatus(cls, now, campusTimezone);
+
   let status = 'Present';
   let badgeType = 'ok';
   let alertTitle = `Checked in to ${cls.name}`;
@@ -871,6 +1047,11 @@ app.post('/api/attendance', authenticateToken, (req, res) => {
       manualStatus === 'Present' ? 'ok' : manualStatus === 'Late' ? 'warn' : 'bad';
     alertTitle = `Attendance updated for ${cls.name}: ${manualStatus}`;
     alertDetail = `${displayDate}, ${timeStr} · recorded at ${finalPlace}`;
+  } else if (!schedStatus.isOpen) {
+    status = `Rejected — Outside scheduled class time (${cls.schedule || 'closed'})`;
+    badgeType = 'bad';
+    alertTitle = `Check-in refused — outside lecture hours`;
+    alertDetail = `${displayDate}, ${timeStr} · ${cls.name} (${cls.schedule || 'closed'}) · Check-in rejected: lecture is not currently in session.`;
   } else if (livenessVerified === false) {
     status = 'Rejected — Liveness check failed';
     badgeType = 'bad';

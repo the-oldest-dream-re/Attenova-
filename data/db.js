@@ -383,6 +383,35 @@ function searchStudentsByVector(descriptor, topK = 5) {
 }
 
 
+function normalizeAttendanceRecord(r, defaultTimezone = 'Asia/Kolkata') {
+  if (!r) return r;
+  let epoch = r.timestamp;
+  if (!epoch && typeof r.id === 'string' && r.id.startsWith('att_')) {
+    const parsed = Number(r.id.slice(4));
+    if (!isNaN(parsed) && parsed > 1600000000000) {
+      epoch = parsed;
+    }
+  }
+  if (epoch) {
+    const tz = r.timezone || defaultTimezone;
+    try {
+      const d = new Date(epoch);
+      if (!isNaN(d.getTime())) {
+        const dateFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
+        const displayFormatter = new Intl.DateTimeFormat('en-GB', { timeZone: tz, day: 'numeric', month: 'short' });
+        const timeFormatter = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false });
+        r.date = dateFormatter.format(d);
+        r.displayDate = displayFormatter.format(d);
+        r.time = timeFormatter.format(d);
+        r.timestamp = epoch;
+      }
+    } catch {
+      // fallback
+    }
+  }
+  return r;
+}
+
 function loadDB() {
   if (cachedDB) return cachedDB;
   try {
@@ -394,6 +423,9 @@ function loadDB() {
     }
     const raw = fs.readFileSync(DB_PATH, 'utf8');
     cachedDB = JSON.parse(raw);
+    if (Array.isArray(cachedDB.attendance)) {
+      cachedDB.attendance.forEach((r) => normalizeAttendanceRecord(r));
+    }
     return cachedDB;
   } catch (err) {
     console.error('Error loading DB, initializing with seed data:', err);
@@ -417,6 +449,7 @@ function saveDB(data) {
 module.exports = {
   loadDB,
   saveDB,
+  normalizeAttendanceRecord,
   searchStudentsByVector,
   euclideanDistance,
   cosineSimilarity

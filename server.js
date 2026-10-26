@@ -72,6 +72,36 @@ function isAllowedInstitutionalEmail(email, db) {
   return allowedDomains.some((d) => domain === d || domain.endsWith('.' + d));
 }
 
+// Normalize attendance records to precise campus/local submission time
+function normalizeAttendanceRecord(r, defaultTimezone = 'Asia/Kolkata') {
+  if (!r) return r;
+  let epoch = r.timestamp;
+  if (!epoch && typeof r.id === 'string' && r.id.startsWith('att_')) {
+    const parsed = Number(r.id.slice(4));
+    if (!isNaN(parsed) && parsed > 1600000000000) {
+      epoch = parsed;
+    }
+  }
+  if (epoch) {
+    const tz = r.timezone || defaultTimezone;
+    try {
+      const d = new Date(epoch);
+      if (!isNaN(d.getTime())) {
+        const dateFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
+        const displayFormatter = new Intl.DateTimeFormat('en-GB', { timeZone: tz, day: 'numeric', month: 'short' });
+        const timeFormatter = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false });
+        r.date = dateFormatter.format(d);
+        r.displayDate = displayFormatter.format(d);
+        r.time = timeFormatter.format(d);
+        r.timestamp = epoch;
+      }
+    } catch {
+      // fallback
+    }
+  }
+  return r;
+}
+
 // ---- Public Config Endpoint (for Google Identity Services & PWA) ----
 app.get('/api/config', (req, res) => {
   const db = loadDB();
@@ -402,7 +432,7 @@ app.get('/api/data', authenticateToken, (req, res) => {
     currentUser: sanitizeUser(currentUser),
     users: db.users.map(sanitizeUser),
     classes: db.classes,
-    attendance: db.attendance,
+    attendance: (db.attendance || []).map((r) => normalizeAttendanceRecord(r)),
     alerts: db.alerts
   });
 });
@@ -807,10 +837,28 @@ app.post('/api/attendance', authenticateToken, (req, res) => {
     distanceMeters = calculateDistanceMeters(lat, lng, Number(cls.lat), Number(cls.lng));
   }
 
-  const now = new Date();
-  const isoDate = now.toISOString().slice(0, 10);
-  const displayDate = now.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-  const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+  const campusTimezone = req.body.timezone || 'Asia/Kolkata';
+  const now = req.body.clientTimestamp ? new Date(req.body.clientTimestamp) : new Date();
+
+  // Ensure precise date and time matching student submission
+  let isoDate = req.body.date;
+  let displayDate = req.body.displayDate;
+  let timeStr = req.body.time;
+
+  if (!isoDate || !displayDate || !timeStr) {
+    try {
+      const dateFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: campusTimezone, year: 'numeric', month: '2-digit', day: '2-digit' });
+      isoDate = isoDate || dateFormatter.format(now);
+      const displayFormatter = new Intl.DateTimeFormat('en-GB', { timeZone: campusTimezone, day: 'numeric', month: 'short' });
+      displayDate = displayDate || displayFormatter.format(now);
+      const timeFormatter = new Intl.DateTimeFormat('en-GB', { timeZone: campusTimezone, hour: '2-digit', minute: '2-digit', hour12: false });
+      timeStr = timeStr || timeFormatter.format(now);
+    } catch {
+      isoDate = isoDate || now.toISOString().slice(0, 10);
+      displayDate = displayDate || now.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+      timeStr = timeStr || now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+    }
+  }
 
   let status = 'Present';
   let badgeType = 'ok';
@@ -842,7 +890,9 @@ app.post('/api/attendance', authenticateToken, (req, res) => {
   }
 
   const record = {
-    id: 'att_' + Date.now(),
+    id: 'att_' + now.getTime(),
+    timestamp: now.getTime(),
+    createdAt: now.toISOString(),
     studentId: student.id,
     studentEmail: student.email,
     studentName: student.name,
@@ -854,6 +904,7 @@ app.post('/api/attendance', authenticateToken, (req, res) => {
     status,
     badgeType,
     time: timeStr,
+    timezone: campusTimezone,
     distance: `${distanceMeters} m`,
     lat: finalLat,
     lng: finalLng,
@@ -1187,9 +1238,13 @@ app.post('/api/sync', authenticateToken, (req, res) => {
   if (Array.isArray(attendance)) {
     attendance.forEach((ca) => {
       if (!ca || !ca.id || deletedSet.has(ca.id)) return;
-      if (!db.attendance.some((a) => a.id === ca.id)) {
+      normalizeAttendanceRecord(ca);
+      const existingIdx = db.attendance.findIndex((a) => a.id === ca.id);
+      if (existingIdx === -1) {
         db.attendance.push(ca);
         changed = true;
+      } else {
+        normalizeAttendanceRecord(db.attendance[existingIdx]);
       }
     });
     if (changed) {
@@ -1210,7 +1265,7 @@ app.post('/api/sync', authenticateToken, (req, res) => {
     currentUser: sanitizeUser(currentUser),
     users: db.users.map(sanitizeUser),
     classes: db.classes,
-    attendance: db.attendance,
+    attendance: (db.attendance || []).map((r) => normalizeAttendanceRecord(r)),
     alerts: db.alerts,
     deletedIds: db.deletedIds
   });

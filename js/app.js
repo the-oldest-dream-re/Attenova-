@@ -37,6 +37,33 @@ function showToast(message, type = 'info', duration = 3500) {
 }
 window.showToast = showToast;
 
+// ---- Normalize Attendance Record Date & Time to Precise Local Device Clock ----
+function normalizeRecordDateTime(r) {
+  if (!r) return r;
+  let epoch = r.timestamp;
+  if (!epoch && typeof r.id === 'string' && r.id.startsWith('att_')) {
+    const parsed = Number(r.id.slice(4));
+    if (!isNaN(parsed) && parsed > 1600000000000) {
+      epoch = parsed;
+    }
+  }
+
+  if (epoch) {
+    const d = new Date(epoch);
+    if (!isNaN(d.getTime())) {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      r.date = `${year}-${month}-${day}`;
+      r.displayDate = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+      r.time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+      r.timestamp = epoch;
+    }
+  }
+  return r;
+}
+window.normalizeRecordDateTime = normalizeRecordDateTime;
+
 // ---- Theme Engine (Dark / Light SaaS Switcher) ------------------------
 function initThemeEngine() {
   const saved = localStorage.getItem('attenova-theme');
@@ -438,6 +465,7 @@ function getLocalDB() {
       }
     });
     (db.attendance || []).forEach((r) => {
+      normalizeRecordDateTime(r);
       if (
         !r.lat ||
         Math.abs(Number(r.lat) - 18.52) < 0.05 ||
@@ -465,6 +493,9 @@ function getLocalDB() {
 }
 
 function saveLocalDB(db) {
+  if (db && Array.isArray(db.attendance)) {
+    db.attendance.forEach((r) => normalizeRecordDateTime(r));
+  }
   storageSet(STORAGE_KEYS.LOCAL_DB, JSON.stringify(db));
 }
 
@@ -1775,9 +1806,13 @@ function handleOfflineFallback(path, options) {
       (body.classId && db.classes.find((c) => c.id === body.classId)) ||
       db.classes.find((c) => c.live) ||
       db.classes[0];
-    const now = new Date();
-    const displayDate = now.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+    const now = body.clientTimestamp ? new Date(body.clientTimestamp) : new Date();
+    const displayDate = body.displayDate || now.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    const timeStr = body.time || now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+    const subYear = now.getFullYear();
+    const subMonth = String(now.getMonth() + 1).padStart(2, '0');
+    const subDay = String(now.getDate()).padStart(2, '0');
+    const isoDate = body.date || `${subYear}-${subMonth}-${subDay}`;
     const finalLat = typeof body.lat === 'number' ? Number(body.lat.toFixed(5)) : Number(cls.lat || 19.0176);
     const finalLng = typeof body.lng === 'number' ? Number(body.lng.toFixed(5)) : Number(cls.lng || 73.0860);
     const classLat = Number(cls.lat || 19.0176);
@@ -1806,14 +1841,15 @@ function handleOfflineFallback(path, options) {
         : `Outside ${cls.room} (${distanceMeters}m away)`);
 
     const record = {
-      id: 'att_' + Date.now(),
+      id: 'att_' + now.getTime(),
+      timestamp: now.getTime(),
       studentId: student.id,
       studentEmail: student.email,
       studentName: student.name,
       rollNo: student.rollNo || 'CS21-014',
       classId: cls.id,
       className: cls.name,
-      date: now.toISOString().slice(0, 10),
+      date: isoDate,
       displayDate,
       status,
       badgeType,
@@ -2175,6 +2211,7 @@ async function initStudentDashboard() {
   const user = data.currentUser || sessionUser;
   const classes = data.classes || [];
   const allAttendance = data.attendance || [];
+  allAttendance.forEach(normalizeRecordDateTime);
 
   if (user) {
     const firstName = user.name.split(' ')[0];
@@ -3129,7 +3166,17 @@ async function initStudentDashboard() {
         ? 'Active eye-blink and head-yaw 3D challenge verified'
         : 'Liveness challenge incomplete — static image suspected';
 
-      const nowStr = new Date().toLocaleString([], {
+      const subTime = new Date();
+      const clientTimestamp = subTime.getTime();
+      const clientTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kolkata';
+      const clientTime = subTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+      const clientDisplayDate = subTime.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+      const subYear = subTime.getFullYear();
+      const subMonth = String(subTime.getMonth() + 1).padStart(2, '0');
+      const subDay = String(subTime.getDate()).padStart(2, '0');
+      const clientDate = `${subYear}-${subMonth}-${subDay}`;
+
+      const nowStr = subTime.toLocaleString([], {
         day: '2-digit',
         month: 'short',
         year: 'numeric',
@@ -3192,11 +3239,16 @@ async function initStudentDashboard() {
             faceScore: faceResult.score,
             livenessVerified: finalLivenessOk,
             livenessScore: finalLivenessScore,
-            livenessDetails: finalLivenessDetails
+            livenessDetails: finalLivenessDetails,
+            clientTimestamp,
+            timezone: clientTimezone,
+            time: clientTime,
+            date: clientDate,
+            displayDate: clientDisplayDate
           })
         });
 
-        const rec = res.record;
+        const rec = normalizeRecordDateTime(res.record);
         const notif = res.parentNotification;
         let notifHtml = '';
         if (notif && notif.dispatched) {
@@ -3331,6 +3383,7 @@ if (currentPage === 'faculty') {
 
 async function initFacultyDashboard() {
   let state = await apiRequest('/api/data');
+  (state.attendance || []).forEach(normalizeRecordDateTime);
   const user = state.currentUser || sessionUser;
   if (user) {
     document.querySelector('#faculty-meta').textContent = `${user.name} · ${
@@ -3629,12 +3682,31 @@ async function initFacultyDashboard() {
       const classId = document.querySelector('#m-class').value;
       const manualStatus = document.querySelector('#m-status').value;
 
+      const subTime = new Date();
+      const clientTimestamp = subTime.getTime();
+      const clientTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kolkata';
+      const clientTime = subTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+      const clientDisplayDate = subTime.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+      const subYear = subTime.getFullYear();
+      const subMonth = String(subTime.getMonth() + 1).padStart(2, '0');
+      const subDay = String(subTime.getDate()).padStart(2, '0');
+      const clientDate = `${subYear}-${subMonth}-${subDay}`;
+
       const res = await apiRequest('/api/attendance', {
         method: 'POST',
-        body: JSON.stringify({ studentId, classId, manualStatus })
+        body: JSON.stringify({
+          studentId,
+          classId,
+          manualStatus,
+          clientTimestamp,
+          timezone: clientTimezone,
+          time: clientTime,
+          date: clientDate,
+          displayDate: clientDisplayDate
+        })
       });
       if (res.record) {
-        state.attendance.unshift(res.record);
+        state.attendance.unshift(normalizeRecordDateTime(res.record));
         renderFacultyView();
       }
     });
@@ -3683,6 +3755,7 @@ if (currentPage === 'parent') {
 
 async function initParentDashboard() {
   const data = await apiRequest('/api/data');
+  (data.attendance || []).forEach(normalizeRecordDateTime);
   let user = data.currentUser || sessionUser;
   const classes = data.classes || [];
   let students = (data.users || []).filter((u) => u.role === 'student');
@@ -4064,6 +4137,7 @@ async function initAdminPortal() {
     }))
   ]);
   let state = stateData;
+  (state.attendance || []).forEach(normalizeRecordDateTime);
 
   const googleInput = document.querySelector('#admin-google-client-id');
   if (googleInput) googleInput.value = config.googleClientId || '';

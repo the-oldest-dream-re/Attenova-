@@ -1435,6 +1435,10 @@ async function apiRequest(path, options = {}) {
     if (path === '/api/data' && method === 'GET') {
       try {
         const localDb = getLocalDB();
+        let twilioSettings = {};
+        try {
+          twilioSettings = JSON.parse(localStorage.getItem('attenova_twilio_settings') || '{}');
+        } catch {}
         const syncRes = await fetch('/api/sync', {
           method: 'POST',
           headers,
@@ -1442,7 +1446,8 @@ async function apiRequest(path, options = {}) {
             users: localDb.users || [],
             classes: localDb.classes || [],
             attendance: localDb.attendance || [],
-            deletedIds: localDb.deletedIds || []
+            deletedIds: localDb.deletedIds || [],
+            settings: twilioSettings
           })
         });
         if (syncRes.ok) {
@@ -4536,7 +4541,11 @@ async function initAdminPortal() {
     try {
       const notifConfig = await apiRequest('/api/admin/notifications/config');
       const twilioBadge = document.querySelector('#admin-twilio-status-badge');
+      const credsBadge = document.querySelector('#admin-twilio-creds-badge');
+      const sidIndicator = document.querySelector('#admin-sid-indicator');
+      const tokenIndicator = document.querySelector('#admin-token-indicator');
       const sidInput = document.querySelector('#admin-twilio-sid');
+      const tokenInput = document.querySelector('#admin-twilio-token');
       const phoneInput = document.querySelector('#admin-twilio-phone');
       const whatsappInput = document.querySelector('#admin-twilio-whatsapp');
       const logsTbody = document.querySelector('#admin-notif-logs-tbody');
@@ -4545,11 +4554,39 @@ async function initAdminPortal() {
         twilioBadge.className = `badge ${notifConfig.twilioConfigured ? 'ok' : 'info'}`;
         twilioBadge.textContent = notifConfig.twilioConfigured ? 'Twilio Live API' : 'Simulated Mock Mode';
       }
-      if (sidInput && notifConfig.accountSidMasked && !sidInput.value) {
-        sidInput.placeholder = notifConfig.accountSidMasked;
+      if (credsBadge) {
+        credsBadge.className = `badge ${notifConfig.twilioConfigured ? 'ok' : 'bad'}`;
+        credsBadge.textContent = notifConfig.twilioConfigured ? '✅ Live Connected' : '⚠️ Credentials Needed';
       }
-      if (phoneInput && !phoneInput.value) phoneInput.value = notifConfig.fromPhoneNumber;
-      if (whatsappInput && !whatsappInput.value) whatsappInput.value = notifConfig.whatsappFromNumber;
+
+      if (sidIndicator) {
+        sidIndicator.innerHTML = notifConfig.hasAccountSid
+          ? '<span class="badge sm ok">Configured</span>'
+          : '<span class="badge sm bad">Required</span>';
+      }
+      if (sidInput) {
+        sidInput.placeholder = notifConfig.accountSidMasked
+          ? `${notifConfig.accountSidMasked} (Configured)`
+          : 'e.g. ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
+      }
+
+      if (tokenIndicator) {
+        tokenIndicator.innerHTML = notifConfig.hasAuthToken
+          ? '<span class="badge sm ok">Saved</span>'
+          : '<span class="badge sm bad">Required</span>';
+      }
+      if (tokenInput) {
+        tokenInput.placeholder = notifConfig.hasAuthToken
+          ? '•••••••••••••••• (Saved — leave blank to keep)'
+          : 'Paste 32-character Auth Token';
+      }
+
+      if (phoneInput && !phoneInput.value && notifConfig.fromPhoneNumber) {
+        phoneInput.value = notifConfig.fromPhoneNumber;
+      }
+      if (whatsappInput && !whatsappInput.value && notifConfig.whatsappFromNumber) {
+        whatsappInput.value = notifConfig.whatsappFromNumber;
+      }
 
       if (logsTbody) {
         const logs = notifConfig.recentLogs || [];
@@ -4574,20 +4611,68 @@ async function initAdminPortal() {
     } catch {}
   }
 
+  // Bind Show/Hide Token Toggle
+  const toggleTokenBtn = document.querySelector('#admin-toggle-token-btn');
+  if (toggleTokenBtn) {
+    toggleTokenBtn.onclick = () => {
+      const tokenInput = document.querySelector('#admin-twilio-token');
+      if (!tokenInput) return;
+      tokenInput.type = tokenInput.type === 'password' ? 'text' : 'password';
+      toggleTokenBtn.textContent = tokenInput.type === 'password' ? '👁️' : '🙈';
+    };
+  }
+
   // Bind Save Twilio Configuration button
   const saveTwilioBtn = document.querySelector('#admin-save-twilio-btn');
   if (saveTwilioBtn) {
     saveTwilioBtn.onclick = async () => {
+      const statusEl = document.querySelector('#admin-twilio-save-status');
       const accountSid = document.querySelector('#admin-twilio-sid').value.trim();
       const authToken = document.querySelector('#admin-twilio-token').value.trim();
       const phoneNumber = document.querySelector('#admin-twilio-phone').value.trim();
       const whatsappNumber = document.querySelector('#admin-twilio-whatsapp').value.trim();
-      await apiRequest('/api/admin/notifications/config', {
-        method: 'POST',
-        body: JSON.stringify({ accountSid, authToken, phoneNumber, whatsappNumber })
-      });
-      document.querySelector('#admin-twilio-save-status').textContent = 'Twilio config updated.';
-      renderTwilioNotificationsTab();
+
+      if (accountSid && (!accountSid.startsWith('AC') || accountSid.length < 30)) {
+        if (statusEl) {
+          statusEl.className = 'small bad';
+          statusEl.textContent = 'Account SID must start with "AC" (34 characters).';
+        }
+        return;
+      }
+
+      try {
+        if (statusEl) {
+          statusEl.className = 'small muted';
+          statusEl.textContent = 'Saving…';
+        }
+        const res = await apiRequest('/api/admin/notifications/config', {
+          method: 'POST',
+          body: JSON.stringify({ accountSid, authToken, phoneNumber, whatsappNumber })
+        });
+
+        // Persist to client localStorage snapshot so it survives Render server restarts
+        try {
+          const cachedSettings = JSON.parse(localStorage.getItem('attenova_twilio_settings') || '{}');
+          if (accountSid) cachedSettings.twilioAccountSid = accountSid;
+          if (authToken) cachedSettings.twilioAuthToken = authToken;
+          if (phoneNumber) cachedSettings.twilioPhoneNumber = phoneNumber.replace(/[^\d+]/g, '');
+          if (whatsappNumber) cachedSettings.twilioWhatsAppNumber = whatsappNumber.replace(/[^\d+]/g, '');
+          localStorage.setItem('attenova_twilio_settings', JSON.stringify(cachedSettings));
+        } catch {}
+
+        if (statusEl) {
+          statusEl.className = 'small ok';
+          statusEl.textContent = res.configured
+            ? '✓ Twilio live credentials saved & active!'
+            : '✓ Settings updated (Account SID & Auth Token both required for live delivery).';
+        }
+        renderTwilioNotificationsTab();
+      } catch (err) {
+        if (statusEl) {
+          statusEl.className = 'small bad';
+          statusEl.textContent = 'Error: ' + err.message;
+        }
+      }
     };
   }
 
@@ -4607,10 +4692,28 @@ async function initAdminPortal() {
           method: 'POST',
           body: JSON.stringify({ to, body, isWhatsApp: channel === 'whatsapp' })
         });
-        statusEl.textContent = `Dispatched ${channel.toUpperCase()} alert (SID: ${res.sid || 'mock'}).`;
+        if (res.simulated) {
+          if (statusEl) {
+            statusEl.className = 'small bad';
+            statusEl.textContent = `⚠️ Simulated mock: Twilio SID or Token missing. Message was NOT delivered to ${to}.`;
+          }
+        } else if (res.ok) {
+          if (statusEl) {
+            statusEl.className = 'small ok';
+            statusEl.textContent = `✅ Live ${channel.toUpperCase()} alert delivered! (Twilio SID: ${res.sid || 'ok'})`;
+          }
+        } else {
+          if (statusEl) {
+            statusEl.className = 'small bad';
+            statusEl.textContent = `❌ ${res.error || 'Delivery failed'}`;
+          }
+        }
         renderTwilioNotificationsTab();
       } catch (err) {
-        statusEl.textContent = 'Notice: ' + err.message;
+        if (statusEl) {
+          statusEl.className = 'small bad';
+          statusEl.textContent = 'Notice: ' + err.message;
+        }
       } finally {
         sendTestNotifBtn.disabled = false;
         sendTestNotifBtn.textContent = '🚀 Dispatch Test Alert';
